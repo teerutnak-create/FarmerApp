@@ -4,34 +4,44 @@
     "slug": "FarmerApp",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "assetBundlePatterns": [
-      "**/*"
-    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.popo3290.farmerapp",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "แอปต้องใช้ไมโครโฟนเพื่อบันทึกข้อความด้วยเสียง",
+        "NSSpeechRecognitionUsageDescription": "แอปต้องใช้การรู้จำเสียงเพื่อแปลงเสียงพูดเป็นข้อความ"
+      }
     },
     "android": {
-      "package": "com.farmerapp.app"
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.popo3290.FarmerApp",
+      "permissions": [
+        "RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
       [
         "expo-build-properties",
         {
           "android": {
-            "compileSdkVersion": 34,
-            "targetSdkVersion": 34,
-            "buildToolsVersion": "34.0.0",
-            "kotlinVersion": "1.9.23",
-            "permissions": [
-              "android.permission.RECORD_AUDIO"
-            ]
-          },
-          "ios": {
-            "infoPlist": {
-              "NSMicrophoneUsageDescription": "แอปพลิเคชันต้องการใช้ไมโครโฟนเพื่อรับคำสั่งเสียงในการบันทึกข้อมูล",
-              "NSSpeechRecognitionUsageDescription": "แอปพลิเคชันต้องการใช้ระบบรู้จำเสียงเพื่อแปลงเสียงพูดเป็นข้อความ"
-            }
+            "kotlinVersion": "2.1.20"
           }
         }
       ]

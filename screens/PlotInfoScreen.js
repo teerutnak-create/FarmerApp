@@ -35,9 +35,9 @@ export default function PlotInfoScreen({ onSave, onClose }) {
   const hasCert = standards.some((x) => CERT_STANDARDS.includes(x));
 
   const save = () => {
-    if (!plot) return Alert.alert('กรอกข้อมูลไม่ครบ', 'กรุณาเลือกแปลงนาของท่าน');
-    if (!soil) return Alert.alert('กรอกข้อมูลไม่ครบ', 'กรุณาเลือกชนิดดิน');
-    if (!chem) return Alert.alert('กรอกข้อมูลไม่ครบ', 'กรุณาเลือกประวัติการใช้สารเคมี');
+    if (!plot) return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกแปลงนาของท่าน');
+    if (!soil) return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกชนิดดิน');
+    if (!chem) return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกประวัติการใช้สารเคมี');
 
     const extra = { plot, rai, soil, chem, facilities, standards };
     if (hasCert) {
@@ -48,158 +48,197 @@ export default function PlotInfoScreen({ onSave, onClose }) {
       (standards.length > 0 ? ' · ' + standards.join(', ') : '');
 
     onSave('ข้อมูลแปลง', extra);
-    Alert.alert('บันทึกสำเร็จ ✅', extra.summary, [{ text: 'ตกลง', onPress: onClose }]);
+
+    // ป็อบอัพแจ้งเตือนสำเร็จ กด ตกลง แล้วปิดหน้านี้
+    Alert.alert(
+      'บันทึกสำเร็จ! ✅',
+      extra.summary,
+      [
+        {
+          text: 'ตกลง',
+          onPress: () => {
+            if (onClose) onClose();
+          },
+        },
+      ],
+      { cancelable: false }
+    );
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f3f0ff' }}>
-      <StatusBar barStyle="light-content" backgroundColor="#1d1b54" />
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
       {/* แถบส่วนหัว */}
-      <View style={senior.topBar}>
-        <TouchableOpacity onPress={onClose} style={senior.backBtn}>
-          <Text style={senior.backBtnText}>← ย้อนกลับ</Text>
+      <View style={styles.topBar}>
+        <TouchableOpacity onPress={onClose} style={styles.backBtn} activeOpacity={0.7}>
+          <Text style={styles.backBtnText}>← ย้อนกลับ</Text>
         </TouchableOpacity>
-        <Text style={senior.topTitle}>🗺️ บันทึกข้อมูลแปลงนา</Text>
+        <Text style={styles.topTitle}>บันทึกข้อมูลแปลงนา</Text>
+        <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView contentContainerStyle={senior.container} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         
         {/* ข้อ 1: เลือกแปลงนา */}
-        <View style={senior.card}>
-          <Text style={senior.cardTitle}>1. เลือกแปลงนาของท่าน</Text>
-          <View style={senior.chipGroup}>
-            {PLOTS.map((p) => (
-              <TouchableOpacity
-                key={p}
-                style={[senior.chip, plot === p && senior.chipActive]}
-                onPress={() => setPlot(p)}
-              >
-                <Text style={[senior.chipText, plot === p && senior.chipTextActive]}>
-                  {p}
-                </Text>
-              </TouchableOpacity>
-            ))}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>1. เลือกแปลงนาของท่าน</Text>
+          <View style={styles.chipGroup}>
+            {PLOTS.map((p) => {
+              const isSelected = plot === p;
+              return (
+                <TouchableOpacity
+                  key={p}
+                  style={[styles.chip, isSelected && styles.chipActive]}
+                  onPress={() => setPlot(p)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                    {p}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
         {/* ข้อ 2: ขนาดแปลงนา */}
-        <View style={senior.card}>
-          <Text style={senior.cardTitle}>2. ขนาดแปลงนา (ไร่)</Text>
-          <View style={senior.stepperContainer}>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>2. ขนาดแปลงนา (ไร่)</Text>
+          <View style={styles.stepperContainer}>
             <TouchableOpacity
-              style={senior.stepBtn}
+              style={styles.stepBtn}
               onPress={() => setRai(Math.max(0.5, rai - 0.5))}
+              activeOpacity={0.7}
             >
-              <Text style={senior.stepBtnText}>−</Text>
+              <Text style={styles.stepBtnText}>−</Text>
             </TouchableOpacity>
 
-            <View style={senior.stepperValueBox}>
-              <Text style={senior.stepperNumber}>{rai}</Text>
-              <Text style={senior.stepperUnit}>ไร่</Text>
+            <View style={styles.stepperValueBox}>
+              <Text style={styles.stepperNumber}>{rai}</Text>
+              <Text style={styles.stepperUnit}>ไร่</Text>
             </View>
 
             <TouchableOpacity
-              style={senior.stepBtn}
+              style={styles.stepBtn}
               onPress={() => setRai(rai + 0.5)}
+              activeOpacity={0.7}
             >
-              <Text style={senior.stepBtnText}>+</Text>
+              <Text style={styles.stepBtnText}>+</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* ข้อ 3: ชนิดดิน */}
-        <View style={senior.card}>
-          <Text style={senior.cardTitle}>3. ชนิดดินในแปลง</Text>
-          <View style={senior.chipGroup}>
-            {SOILS.map((x) => (
-              <TouchableOpacity
-                key={x}
-                style={[senior.chip, soil === x && senior.chipActive]}
-                onPress={() => setSoil(x)}
-              >
-                <Text style={[senior.chipText, soil === x && senior.chipTextActive]}>
-                  {x}
-                </Text>
-              </TouchableOpacity>
-            ))}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>3. ชนิดดินในแปลง</Text>
+          <View style={styles.chipGroup}>
+            {SOILS.map((x) => {
+              const isSelected = soil === x;
+              return (
+                <TouchableOpacity
+                  key={x}
+                  style={[styles.chip, isSelected && styles.chipActive]}
+                  onPress={() => setSoil(x)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                    {x}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
         {/* ข้อ 4: ประวัติสารเคมี */}
-        <View style={senior.card}>
-          <Text style={senior.cardTitle}>4. ประวัติการใช้สารเคมี</Text>
-          <View style={senior.chipGroup}>
-            {CHEM_HISTORY.map((x) => (
-              <TouchableOpacity
-                key={x}
-                style={[senior.chip, chem === x && senior.chipActive]}
-                onPress={() => setChem(x)}
-              >
-                <Text style={[senior.chipText, chem === x && senior.chipTextActive]}>
-                  {x}
-                </Text>
-              </TouchableOpacity>
-            ))}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>4. ประวัติการใช้สารเคมี</Text>
+          <View style={styles.chipGroup}>
+            {CHEM_HISTORY.map((x) => {
+              const isSelected = chem === x;
+              return (
+                <TouchableOpacity
+                  key={x}
+                  style={[styles.chip, isSelected && styles.chipActive]}
+                  onPress={() => setChem(x)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                    {x}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
         {/* ข้อ 5: สิ่งที่มีในแปลง */}
-        <View style={senior.card}>
-          <Text style={senior.cardTitle}>5. สิ่งที่มีในแปลง (เลือกได้หลายข้อ)</Text>
-          <View style={senior.chipGroup}>
-            {FACILITIES.map((x) => (
-              <TouchableOpacity
-                key={x}
-                style={[senior.chip, facilities.includes(x) && senior.chipActive]}
-                onPress={() => toggle(facilities, setFacilities, x)}
-              >
-                <Text style={[senior.chipText, facilities.includes(x) && senior.chipTextActive]}>
-                  {facilities.includes(x) ? '✓ ' : ''}{x}
-                </Text>
-              </TouchableOpacity>
-            ))}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>5. สิ่งที่มีในแปลง (เลือกได้หลายข้อ)</Text>
+          <View style={styles.chipGroup}>
+            {FACILITIES.map((x) => {
+              const isSelected = facilities.includes(x);
+              return (
+                <TouchableOpacity
+                  key={x}
+                  style={[styles.chip, isSelected && styles.chipActive]}
+                  onPress={() => toggle(facilities, setFacilities, x)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                    {isSelected ? '✓ ' : ''}{x}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
         {/* ข้อ 6: มาตรฐานที่มี */}
-        <View style={senior.card}>
-          <Text style={senior.cardTitle}>6. มาตรฐานรับรอง (เลือกได้หลายข้อ)</Text>
-          <View style={senior.chipGroup}>
-            {STANDARDS.map((x) => (
-              <TouchableOpacity
-                key={x}
-                style={[senior.chip, standards.includes(x) && senior.chipActive]}
-                onPress={() => toggle(standards, setStandards, x)}
-              >
-                <Text style={[senior.chipText, standards.includes(x) && senior.chipTextActive]}>
-                  {standards.includes(x) ? '✓ ' : ''}{x}
-                </Text>
-              </TouchableOpacity>
-            ))}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>6. มาตรฐานรับรอง (เลือกได้หลายข้อ)</Text>
+          <View style={styles.chipGroup}>
+            {STANDARDS.map((x) => {
+              const isSelected = standards.includes(x);
+              return (
+                <TouchableOpacity
+                  key={x}
+                  style={[styles.chip, isSelected && styles.chipActive]}
+                  onPress={() => toggle(standards, setStandards, x)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                    {isSelected ? '✓ ' : ''}{x}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           {hasCert && (
-            <View style={{ marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f0f0f0' }}>
-              <Text style={senior.cardTitle}>ใบรับรองหมดอายุในอีก (เดือน)</Text>
-              <View style={senior.stepperContainer}>
+            <View style={styles.certExpiryBox}>
+              <Text style={styles.cardTitle}>ใบรับรองหมดอายุในอีก (เดือน)</Text>
+              <View style={styles.stepperContainer}>
                 <TouchableOpacity
-                  style={senior.stepBtn}
+                  style={styles.stepBtn}
                   onPress={() => setMonths(Math.max(1, months - 1))}
+                  activeOpacity={0.7}
                 >
-                  <Text style={senior.stepBtnText}>−</Text>
+                  <Text style={styles.stepBtnText}>−</Text>
                 </TouchableOpacity>
 
-                <View style={senior.stepperValueBox}>
-                  <Text style={senior.stepperNumber}>{months}</Text>
-                  <Text style={senior.stepperUnit}>เดือน</Text>
+                <View style={styles.stepperValueBox}>
+                  <Text style={styles.stepperNumber}>{months}</Text>
+                  <Text style={styles.stepperUnit}>เดือน</Text>
                 </View>
 
                 <TouchableOpacity
-                  style={senior.stepBtn}
+                  style={styles.stepBtn}
                   onPress={() => setMonths(months + 1)}
+                  activeOpacity={0.7}
                 >
-                  <Text style={senior.stepBtnText}>+</Text>
+                  <Text style={styles.stepBtnText}>+</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -207,129 +246,162 @@ export default function PlotInfoScreen({ onSave, onClose }) {
         </View>
 
         {/* ปุ่มบันทึกข้อมูล */}
-        <TouchableOpacity style={senior.saveBigBtn} onPress={save}>
-          <Text style={senior.saveBigBtnText}>💾 บันทึกข้อมูลแปลงนา</Text>
+        <TouchableOpacity
+          style={[styles.saveBigBtn, (!plot || !soil || !chem) && styles.saveBigBtnDisabled]}
+          onPress={save}
+          disabled={!plot || !soil || !chem}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.saveBigBtnText}>💾 บันทึกข้อมูลแปลงนา</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// เพิ่มการประกาศ Style Object 'senior'
-const senior = StyleSheet.create({
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#f0fdf4', // สีเขียวอ่อนมินิมอล
+  },
+  topBar: {
+    height: 56,
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#dcfce7',
+  },
+  backBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  backBtnText: {
+    color: '#166534',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  topTitle: {
+    color: '#14532d',
+    fontWeight: 'bold',
+    fontSize: 18,
+  },
   container: {
     padding: 16,
     paddingBottom: 40,
-    gap: 14,
+    gap: 16,
   },
-  topBar: {
-    height: 60,
-    backgroundColor: '#1d1b54',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-  backBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 10,
-    marginRight: 12,
-  },
-  backBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 15 },
-  topTitle: { color: '#ffffff', fontWeight: 'bold', fontSize: 18 },
-
   card: {
     backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 18,
-    elevation: 3,
-    shadowColor: '#000',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#dcfce7',
+    shadowColor: '#166534',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   cardTitle: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: '#1d1b54',
-    marginBottom: 14,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#14532d',
+    marginBottom: 12,
   },
   chipGroup: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   chip: {
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 24,
-    backgroundColor: '#f3f4f6',
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
   },
   chipActive: {
-    backgroundColor: '#6b52ae',
-    borderColor: '#6b52ae',
+    backgroundColor: '#16a34a',
+    borderColor: '#16a34a',
   },
   chipText: {
-    fontSize: 16,
-    color: '#374151',
-    fontWeight: '600',
+    fontSize: 14,
+    color: '#15803d',
+    fontWeight: '500',
   },
   chipTextActive: {
     color: '#ffffff',
     fontWeight: 'bold',
   },
 
+  // Stepper
   stepperContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#f8fafc',
     padding: 12,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
   stepBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#6b52ae',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#15803d',
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepBtnText: {
     color: '#ffffff',
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
   },
   stepperValueBox: {
     alignItems: 'center',
   },
   stepperNumber: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#1d1b54',
+    color: '#14532d',
   },
   stepperUnit: {
-    fontSize: 14,
-    color: '#6b7280',
+    fontSize: 13,
+    color: '#16a34a',
     fontWeight: '600',
   },
+  certExpiryBox: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
 
+  // ปุ่มบันทึกใหญ่
   saveBigBtn: {
-    backgroundColor: '#1d1b54',
+    backgroundColor: '#16a34a',
     paddingVertical: 16,
-    borderRadius: 16,
+    borderRadius: 14,
     alignItems: 'center',
-    marginTop: 10,
+    shadowColor: '#16a34a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
     elevation: 3,
+  },
+  saveBigBtnDisabled: {
+    backgroundColor: '#cbd5e1',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   saveBigBtnText: {
     color: '#ffffff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
   },
 });

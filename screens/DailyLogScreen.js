@@ -1,421 +1,496 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View,
+  StyleSheet,
   Text,
+  View,
   TextInput,
   TouchableOpacity,
-  ScrollView,
   Alert,
-  StyleSheet,
   SafeAreaView,
-  StatusBar,
+  ScrollView,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
-import DateTimePickerModal from 'react-native-modal-datetime-picker';
-import Voice from '@react-native-voice/voice';
-import { s } from '../styles';
-import {
-  PLOTS,
-  ACTIVITIES,
-  INPUTS,
-  SOURCES,
-  WATER,
-  WATER_LEVEL,
-  PESTS,
-  LABOR,
-} from '../data/options';
+import Constants from 'expo-constants';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
-export default function DailyLogScreen({ onSave, onClose }) {
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
+const isExpoGo = Constants.appOwnership === 'expo';
 
-  const [plot, setPlot] = useState(null);
-  const [activity, setActivity] = useState(null);
-  const [inputKey, setInputKey] = useState(null);
-  const [qty, setQty] = useState(1);
-  const [source, setSource] = useState(null);
-  const [icsNotified, setIcsNotified] = useState(null);
-  const [water, setWater] = useState(null);
-  const [waterLevel, setWaterLevel] = useState(null);
-  const [pest, setPest] = useState('ไม่พบ');
-  const [labor, setLabor] = useState([]);
+let Voice = null;
+if (!isExpoGo) {
+  try {
+    Voice = require('@react-native-voice/voice').default;
+  } catch (error) {
+    console.log('Voice module load error:', error);
+  }
+}
 
-  const [note, setNote] = useState('');
-  const [isListeningNote, setIsListeningNote] = useState(false);
+export default function DailyLogScreen({ onClose, onSaveLog }) {
+  const [date, setDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const inputInfo = INPUTS.find((i) => i.key === inputKey);
+  const [selectedCategories, setSelectedCategories] = useState(['การรดน้ำ']);
+  const [selectedQuickOptions, setSelectedQuickOptions] = useState([]);
+  const [additionalText, setAdditionalText] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+
+  const categoryData = {
+    'การรดน้ำ': ['รดน้ำเช้า', 'รดน้ำเย็น', 'รดน้ำรอบพิเศษ', 'งดรดน้ำ (ฝนตก)', 'ระบบสปริงเกอร์', 'ระบบน้ำหยด'],
+    'การใส่ปุ๋ย': ['ใส่ปุ๋ยคอก/ปุ๋ยหมัก', 'ใส่ปุ๋ยเคมีสูตรเสมอ 16-16-16', 'ใส่ปุ๋ยสูตรเร่งดอก/ผล', 'พ่นปุ๋ยทางใบ/ฮอร์โมน'],
+    'การเก็บเกี่ยว': ['เก็บผลผลิตเกรด A', 'เก็บผลผลิตเกรด B', 'คัดเกรด/คัดไซส์', 'บรรจุลงกล่อง'],
+    'ปัญหา/โรคพืช': ['พบแมลงศัตรูพืช', 'พบโรคใบจุด/ราแป้ง', 'วัชพืชขึ้นหนาแน่น', 'พืชขาดน้ำ/ใบเหี่ยว'],
+    'รายรับ/รายจ่าย': ['ซื้อปุ๋ย/ยา', 'ค่าแรงงาน', 'ขายผลผลิต', 'ค่าขนส่ง'],
+    'บันทึกทั่วไป': ['ตรวจแปลงประจำวัน', 'เตรียมดิน/พรวนดิน', 'ตัดแต่งกิ่ง', 'ซ่อมแซมระบบน้ำ'],
+  };
+
+  const categories = Object.keys(categoryData);
 
   useEffect(() => {
-    Voice.onSpeechStart = () => setIsListeningNote(true);
-    Voice.onSpeechEnd = () => setIsListeningNote(false);
-    Voice.onSpeechError = (e) => {
-      setIsListeningNote(false);
-      console.log('Voice Error: ', e.error);
-    };
+    if (isExpoGo || !Voice) return;
+
+    Voice.onSpeechStart = () => setIsRecording(true);
+    Voice.onSpeechEnd = () => setIsRecording(false);
     Voice.onSpeechResults = (e) => {
-      if (e.value && e.value.length > 0) {
-        const text = e.value[0];
-        setNote((prev) => (prev ? prev + ' ' + text : text));
+      if (e.value && e.value[0]) {
+        setAdditionalText((prev) => (prev ? `${prev} ${e.value[0]}` : e.value[0]));
       }
+    };
+    Voice.onSpeechError = (e) => {
+      setIsRecording(false);
+      Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกเสียงได้ โปรดลองอีกครั้ง');
     };
 
     return () => {
-      Voice.destroy().then(Voice.removeAllListeners);
+      if (Voice) {
+        Voice.destroy().then(Voice.removeAllListeners);
+      }
     };
   }, []);
 
-  const handleVoiceRecordNote = async () => {
-    if (isListeningNote) {
-      try {
-        await Voice.stop();
-      } catch (e) {
-        console.error(e);
+  const toggleCategory = (cat) => {
+    if (selectedCategories.includes(cat)) {
+      if (selectedCategories.length === 1) {
+        Alert.alert('แจ้งเตือน', 'กรุณาเลือกอย่างน้อย 1 หมวดหมู่หลัก');
+        return;
       }
+      const updatedCategories = selectedCategories.filter((item) => item !== cat);
+      setSelectedCategories(updatedCategories);
+
+      const validOptions = Object.keys(categoryData)
+        .filter((c) => updatedCategories.includes(c))
+        .flatMap((c) => categoryData[c]);
+      setSelectedQuickOptions(selectedQuickOptions.filter((opt) => validOptions.includes(opt)));
     } else {
-      try {
-        await Voice.start('th-TH');
-      } catch (e) {
-        console.error(e);
-      }
+      setSelectedCategories([...selectedCategories, cat]);
     }
   };
 
-  const showDatePicker = () => setDatePickerVisibility(true);
-  const hideDatePicker = () => setDatePickerVisibility(false);
-  const handleConfirmDate = (date) => {
-    setSelectedDate(date);
-    hideDatePicker();
+  const toggleQuickOption = (option) => {
+    if (selectedQuickOptions.includes(option)) {
+      setSelectedQuickOptions(selectedQuickOptions.filter((item) => item !== option));
+    } else {
+      setSelectedQuickOptions([...selectedQuickOptions, option]);
+    }
   };
 
-  const formatDate = (date) => {
-    const d = String(date.getDate()).padStart(2, '0');
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const y = date.getFullYear() + 543;
-    return `${d}/${m}/${y}`;
+  const onDateChange = (event, selectedDate) => {
+    const currentDate = selectedDate || date;
+    setShowDatePicker(Platform.OS === 'ios');
+    setDate(currentDate);
   };
 
-  const toggleLabor = (name) => {
-    setLabor(
-      labor.includes(name) ? labor.filter((x) => x !== name) : [...labor, name]
+  const formatDate = (dateToFormat) => {
+    const day = String(dateToFormat.getDate()).padStart(2, '0');
+    const month = String(dateToFormat.getMonth() + 1).padStart(2, '0');
+    const year = dateToFormat.getFullYear() + 543;
+    return `${day}/${month}/${year}`;
+  };
+
+  const toggleRecording = async () => {
+    if (isExpoGo || !Voice) {
+      Alert.alert(
+        'แจ้งเตือน Expo Go',
+        'ปุ่มไมค์ในแอปไม่รองรับบน Expo Go กรุณาแตะช่องรายละเอียดเพิ่มเติมแล้วใช้ปุ่มรูปไมค์ที่คีย์บอร์ด iPhone แทนครับ',
+        [{ text: 'ตกลง' }]
+      );
+      return;
+    }
+
+    try {
+      if (isRecording) {
+        await Voice.stop();
+        setIsRecording(false);
+      } else {
+        await Voice.start('th-TH');
+        setIsRecording(true);
+      }
+    } catch (error) {
+      Alert.alert('เกิดข้อผิดพลาด', 'ระบบบันทึกเสียงมีปัญหา');
+    }
+  };
+
+  const handleSave = () => {
+    if (selectedQuickOptions.length === 0 && !additionalText.trim()) {
+      Alert.alert('คำเตือน', 'กรุณาเลือกรายการย่อยอย่างน้อย 1 รายการ หรือระบุรายละเอียดเพิ่มเติม');
+      return;
+    }
+
+    const categoriesText = selectedCategories.join(', ');
+    const quickOptionsText = selectedQuickOptions.join(', ');
+    const fullDetail = [quickOptionsText, additionalText.trim()].filter(Boolean).join(' | ');
+
+    if (onSaveLog) {
+      onSaveLog('บันทึกประจำวัน', {
+        date: formatDate(date),
+        category: categoriesText,
+        detail: fullDetail,
+      });
+    }
+
+    Alert.alert(
+      'บันทึกสำเร็จ! ✅',
+      `วันที่: ${formatDate(date)}\nหมวดหมู่: ${categoriesText}\nรายการ: ${fullDetail}`,
+      [
+        {
+          text: 'ตกลง',
+          onPress: () => {
+            if (onClose) onClose();
+          },
+        },
+      ],
+      { cancelable: false }
     );
   };
 
-  const warn = (msg) => Alert.alert('กรอกข้อมูลยังไม่ครบ', msg);
-
-  const save = () => {
-    if (!plot) return warn('กรุณาเลือกแปลงนา');
-    if (!activity) return warn('กรุณาเลือว่าทำกิจกรรมอะไร');
-
-    if (activity === 'ใส่ปุ๋ย') {
-      if (!inputKey) return warn('กรุณาเลือกชนิดปุ๋ย/สารที่ใช้');
-      if (!source) return warn('กรุณาเลือกแหล่งที่มา');
-      if (inputInfo?.selfMade && icsNotified === null)
-        return warn('น้ำหมักทำเอง: กรุณาระบุว่าแจ้ง ICS แล้วหรือยัง');
-    }
-    if (activity === 'ให้น้ำ' && !water) return warn('กรุณาเลือกแหล่งน้ำ');
-
-    const parts = [activity, plot];
-    const extra = { plot, activity, workDate: selectedDate.toISOString(), pest, labor, note };
-
-    if (activity === 'ใส่ปุ๋ย') {
-      extra.input = inputKey;
-      extra.qty = qty;
-      extra.unit = inputInfo.unit;
-      extra.source = source;
-      parts.push(`${inputKey} ${qty} ${inputInfo.unit}`);
-      if (inputInfo.selfMade) {
-        extra.icsNotified = icsNotified;
-        if (!icsNotified) extra.icsPending = true;
-      }
-    }
-    if (activity === 'ให้น้ำ') {
-      extra.water = water;
-      extra.waterLevel = waterLevel;
-      parts.push(`น้ำจาก${water}`);
-    }
-    if (pest !== 'ไม่พบ') parts.push(pest);
-
-    extra.summary = parts.join(' · ');
-    onSave('บันทึกรายวัน', extra);
-    Alert.alert('บันทึกสำเร็จ ✅', extra.summary, [{ text: 'ตกลง', onPress: onClose }]);
-  };
-
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f3f0ff' }}>
-      <StatusBar barStyle="light-content" backgroundColor="#1d1b54" />
-
-      {/* Top Bar */}
-      <View style={formStyle.topBar}>
-        <TouchableOpacity onPress={onClose} style={formStyle.backBtn}>
-          <Text style={formStyle.backBtnText}>← ยกเลิก</Text>
+    <SafeAreaView style={styles.container}>
+      {/* Header Bar */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={onClose}>
+          <Text style={styles.backButtonText}>← กลับ</Text>
         </TouchableOpacity>
-        <Text style={formStyle.topTitle}>📝 บันทึกกิจกรรมรายวัน</Text>
-        <View style={{ width: 60 }} />
+        <Text style={styles.headerTitle}>บันทึกประจำวัน</Text>
+        <View style={{ width: 50 }} />
       </View>
 
-      <ScrollView contentContainerStyle={formStyle.container} showsVerticalScrollIndicator={false}>
-        {/* Card 1 */}
-        <View style={formStyle.card}>
-          <Text style={formStyle.cardTitle}>1. ข้อมูลการลงปฏิบัติงาน</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {isExpoGo && (
+          <View style={styles.warningBanner}>
+            <Text style={styles.warningText}>
+              💡 ใช้งานบน Expo Go: แตะช่องข้อความด้านล่าง แล้วใช้ปุ่มไมค์บนคีย์บอร์ดเพื่อพิมพ์ด้วยเสียง
+            </Text>
+          </View>
+        )}
 
-          <Text style={formStyle.label}>เลือกวันที่ทำกิจกรรม</Text>
-          <TouchableOpacity style={formStyle.dateInputBtn} onPress={showDatePicker}>
-            <Text style={formStyle.dateInputText}>📅 {formatDate(selectedDate)}</Text>
-            <Text style={formStyle.dateInputIcon}>▼</Text>
+        {/* 1. เลือกวันที่ */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>📅 วันที่บันทึก</Text>
+          <TouchableOpacity style={styles.dateSelector} onPress={() => setShowDatePicker(true)}>
+            <Text style={styles.dateText}>📅 {formatDate(date)}</Text>
+            <Text style={styles.dateHintText}>กดเพื่อเปลี่ยน</Text>
           </TouchableOpacity>
 
-          <DateTimePickerModal
-            isVisible={isDatePickerVisible}
-            mode="date"
-            onConfirm={handleConfirmDate}
-            onCancel={hideDatePicker}
-            maximumDate={new Date()}
-            confirmTextIOS="ตกลง"
-            cancelTextIOS="ยกเลิก"
-          />
-
-          <Text style={formStyle.label}>เลือกแปลงนา</Text>
-          <View style={formStyle.chipGroup}>
-            {PLOTS.map((p) => (
-              <TouchableOpacity
-                key={p}
-                style={[formStyle.chip, plot === p && formStyle.chipActive]}
-                onPress={() => setPlot(p)}
-              >
-                <Text style={[formStyle.chipText, plot === p && formStyle.chipTextActive]}>
-                  {p}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {showDatePicker && (
+            <DateTimePicker value={date} mode="date" display="default" onChange={onDateChange} />
+          )}
         </View>
 
-        {/* Card 2 */}
-        <View style={formStyle.card}>
-          <Text style={formStyle.cardTitle}>2. กิจกรรมที่ทำ</Text>
+        {/* 2. เลือกหมวดหมู่หลัก */}
+        <View style={styles.card}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.cardTitle}>📂 เลือกหมวดหมู่หลัก</Text>
+            <Text style={styles.subHintText}>*(เลือกได้หลายหมวด)</Text>
+          </View>
 
-          <View style={formStyle.chipGroup}>
-            {ACTIVITIES.map((a) => (
-              <TouchableOpacity
-                key={a.key}
-                style={[formStyle.chipLarge, activity === a.key && formStyle.chipActive]}
-                onPress={() => setActivity(a.key)}
-              >
-                <Text style={{ fontSize: 20 }}>{a.icon}</Text>
-                <Text
-                  style={[
-                    formStyle.chipText,
-                    activity === a.key && formStyle.chipTextActive,
-                    { marginLeft: 6, fontWeight: 'bold' },
-                  ]}
+          <View style={styles.verticalCategoryContainer}>
+            {categories.map((cat) => {
+              const isSelected = selectedCategories.includes(cat);
+              return (
+                <TouchableOpacity
+                  key={cat}
+                  style={[styles.categoryCard, isSelected && styles.categoryCardSelected]}
+                  onPress={() => toggleCategory(cat)}
+                  activeOpacity={0.7}
                 >
-                  {a.key}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Text style={[styles.categoryCardText, isSelected && styles.categoryCardTextSelected]}>
+                    {isSelected ? '☑ ' : '☐ '}{cat}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
+        </View>
 
-          {activity === 'ใส่ปุ๋ย' && (
-            <View style={formStyle.subBox}>
-              <Text style={formStyle.label}>ชนิดปุ๋ย/สารที่ใช้</Text>
-              <View style={formStyle.chipGroup}>
-                {INPUTS.map((i) => (
-                  <TouchableOpacity
-                    key={i.key}
-                    style={[formStyle.chip, inputKey === i.key && formStyle.chipActive]}
-                    onPress={() => setInputKey(i.key)}
-                  >
-                    <Text style={[formStyle.chipText, inputKey === i.key && formStyle.chipTextActive]}>
-                      {i.key}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {inputInfo && (
-                <>
-                  <Text style={formStyle.label}>ปริมาณ ({inputInfo.unit})</Text>
-                  <View style={formStyle.stepper}>
-                    <TouchableOpacity style={formStyle.stepBtn} onPress={() => setQty(Math.max(1, qty - 1))}>
-                      <Text style={formStyle.stepText}>−</Text>
-                    </TouchableOpacity>
-                    <Text style={formStyle.qtyText}>{qty}</Text>
-                    <TouchableOpacity style={formStyle.stepBtn} onPress={() => setQty(qty + 1)}>
-                      <Text style={formStyle.stepText}>+</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <Text style={formStyle.label}>แหล่งที่มา</Text>
-                  <View style={formStyle.chipGroup}>
-                    {SOURCES.map((x) => (
+        {/* 3. เลือกรายการย่อย */}
+        {selectedCategories.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>📌 รายการย่อยตามหมวดหมู่</Text>
+            {selectedCategories.map((cat) => (
+              <View key={cat} style={styles.categorySubGroup}>
+                <Text style={styles.subCategoryTitle}>• {cat}</Text>
+                <View style={styles.quickOptionContainer}>
+                  {categoryData[cat].map((option) => {
+                    const isSelected = selectedQuickOptions.includes(option);
+                    return (
                       <TouchableOpacity
-                        key={x}
-                        style={[formStyle.chip, source === x && formStyle.chipActive]}
-                        onPress={() => setSource(x)}
+                        key={option}
+                        style={[
+                          styles.quickOptionBtn,
+                          isSelected && styles.quickOptionBtnSelected,
+                        ]}
+                        onPress={() => toggleQuickOption(option)}
+                        activeOpacity={0.7}
                       >
-                        <Text style={[formStyle.chipText, source === x && formStyle.chipTextActive]}>
-                          {x}
+                        <Text style={[styles.quickOptionText, isSelected && styles.quickOptionTextSelected]}>
+                          {isSelected ? '✓ ' : ''}{option}
                         </Text>
                       </TouchableOpacity>
-                    ))}
-                  </View>
-                </>
-              )}
-
-              {inputInfo?.selfMade && (
-                <View style={formStyle.warnCard}>
-                  <Text style={formStyle.warnText}>⚠️ น้ำหมักทำเอง ต้องแจ้งขออนุญาต ICS ก่อนใช้</Text>
-                  <View style={formStyle.chipGroup}>
-                    <TouchableOpacity
-                      style={[formStyle.chip, icsNotified === true && formStyle.chipActive]}
-                      onPress={() => setIcsNotified(true)}
-                    >
-                      <Text style={[formStyle.chipText, icsNotified === true && formStyle.chipTextActive]}>
-                        ✅ แจ้ง ICS แล้ว
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[formStyle.chip, icsNotified === false && formStyle.chipActive]}
-                      onPress={() => setIcsNotified(false)}
-                    >
-                      <Text style={[formStyle.chipText, icsNotified === false && formStyle.chipTextActive]}>
-                        ❌ ยังไม่ได้แจ้ง
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+                    );
+                  })}
                 </View>
-              )}
-            </View>
-          )}
-
-          {activity === 'ให้น้ำ' && (
-            <View style={formStyle.subBox}>
-              <Text style={formStyle.label}>แหล่งน้ำ</Text>
-              <View style={formStyle.chipGroup}>
-                {WATER.map((w) => (
-                  <TouchableOpacity
-                    key={w}
-                    style={[formStyle.chip, water === w && formStyle.chipActive]}
-                    onPress={() => setWater(w)}
-                  >
-                    <Text style={[formStyle.chipText, water === w && formStyle.chipTextActive]}>
-                      {w}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
               </View>
-
-              {water === 'บ่อ' && (
-                <>
-                  <Text style={formStyle.label}>ระดับน้ำในบ่อ</Text>
-                  <View style={formStyle.chipGroup}>
-                    {WATER_LEVEL.map((l) => (
-                      <TouchableOpacity
-                        key={l}
-                        style={[formStyle.chip, waterLevel === l && formStyle.chipActive]}
-                        onPress={() => setWaterLevel(l)}
-                      >
-                        <Text style={[formStyle.chipText, waterLevel === l && formStyle.chipTextActive]}>
-                          {l}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </>
-              )}
-            </View>
-          )}
-        </View>
-
-        {/* Card 3 */}
-        <View style={formStyle.card}>
-          <Text style={formStyle.cardTitle}>3. ศัตรูพืชและแรงงาน</Text>
-
-          <Text style={formStyle.label}>การพบแมลง/โรคพืช</Text>
-          <View style={formStyle.chipGroup}>
-            {PESTS.map((p) => (
-              <TouchableOpacity
-                key={p}
-                style={[formStyle.chip, pest === p && formStyle.chipActive]}
-                onPress={() => setPest(p)}
-              >
-                <Text style={[formStyle.chipText, pest === p && formStyle.chipTextActive]}>
-                  {p}
-                </Text>
-              </TouchableOpacity>
             ))}
           </View>
+        )}
 
-          <Text style={formStyle.label}>ใช้แรงงาน/เครื่องจักร (เลือกได้หลายข้อ)</Text>
-          <View style={formStyle.chipGroup}>
-            {LABOR.map((l) => (
-              <TouchableOpacity
-                key={l}
-                style={[formStyle.chip, labor.includes(l) && formStyle.chipActive]}
-                onPress={() => toggleLabor(l)}
-              >
-                <Text style={[formStyle.chipText, labor.includes(l) && formStyle.chipTextActive]}>
-                  {l}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <View style={formStyle.labelRow}>
-            <Text style={formStyle.labelVoice}>บันทึกเพิ่มเติม (ถ้ามี)</Text>
-            <TouchableOpacity
-              style={[formStyle.voiceBtn, isListeningNote && formStyle.voiceBtnActive]}
-              onPress={handleVoiceRecordNote}
-            >
-              <Text style={formStyle.voiceBtnText}>
-                {isListeningNote ? '🛑 กดเพื่อหยุดฟัง' : '🎙️ พูดด้วยเสียง'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+        {/* 4. รายละเอียดเพิ่มเติม */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>📝 รายละเอียดเพิ่มเติม / หมายเหตุ</Text>
           <TextInput
-            style={[s.input, { height: 70, borderRadius: 12, paddingTop: 10 }]}
-            value={note}
-            onChangeText={setNote}
-            placeholder={isListeningNote ? 'กำลังฟัง...' : 'เช่น สภาพอากาศร้อนจัด หรือกดปุ่มพูดด้วยเสียง...'}
+            style={styles.textInput}
             multiline
+            placeholder="พิมพ์รายละเอียดเพิ่มเติม หรือใช้ไมค์คีย์บอร์ดพูด..."
+            placeholderTextColor="#94a3b8"
+            value={additionalText}
+            onChangeText={setAdditionalText}
           />
+
+          {/* 5. ปุ่มไมค์ */}
+          <TouchableOpacity
+            style={[
+              styles.micButton,
+              isRecording && styles.micButtonActive,
+              isExpoGo && styles.micButtonDisabled,
+            ]}
+            onPress={toggleRecording}
+            activeOpacity={0.8}
+          >
+            {isRecording ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.micButtonText}>
+                {isExpoGo ? '🎙️ ปุ่มไมค์ (แนะนำใช้ไมค์คีย์บอร์ด)' : '🎙️ กดเพื่อพูดบันทึกเสียง'}
+              </Text>
+            )}
+          </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={[s.bigBtn, { backgroundColor: '#1d1b54', marginTop: 10 }]} onPress={save}>
-          <Text style={s.bigBtnText}>💾 บันทึกกิจกรรมเรียบร้อย</Text>
+        {/* 6. ปุ่มบันทึกข้อมูล */}
+        <TouchableOpacity style={styles.saveButton} onPress={handleSave} activeOpacity={0.8}>
+          <Text style={styles.saveButtonText}>
+            💾 บันทึกข้อมูล ({selectedCategories.length} หมวด / {selectedQuickOptions.length} รายการ)
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const formStyle = StyleSheet.create({
-  container: { padding: 16, paddingBottom: 40, gap: 14 },
-  topBar: { height: 54, backgroundColor: '#1d1b54', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
-  backBtn: { paddingVertical: 6, paddingHorizontal: 10, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 8 },
-  backBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 13 },
-  topTitle: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 },
-  card: { backgroundColor: '#ffffff', borderRadius: 16, padding: 16, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
-  cardTitle: { fontSize: 15, fontWeight: 'bold', color: '#1d1b54', marginBottom: 12, borderBottomWidth: 1, borderBottomColor: '#f3f0ff', paddingBottom: 8 },
-  label: { fontSize: 13, fontWeight: '600', color: '#4b5563', marginTop: 10, marginBottom: 6 },
-  dateInputBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8 },
-  dateInputText: { fontSize: 14, color: '#374151', fontWeight: '600' },
-  dateInputIcon: { fontSize: 12, color: '#9ca3af' },
-  chipGroup: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, backgroundColor: '#f3f4f6', borderWidth: 1, borderColor: '#e5e7eb' },
-  chipLarge: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 12, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0' },
-  chipActive: { backgroundColor: '#6b52ae', borderColor: '#6b52ae' },
-  chipText: { fontSize: 13, color: '#374151' },
-  chipTextActive: { color: '#ffffff', fontWeight: 'bold' },
-  subBox: { marginTop: 12, padding: 12, backgroundColor: '#f8fafc', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0' },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 4 },
-  stepBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#6b52ae', justifyContent: 'center', alignItems: 'center' },
-  stepText: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
-  qtyText: { fontSize: 18, fontWeight: 'bold', color: '#1d1b54' },
-  warnCard: { marginTop: 10, padding: 10, backgroundColor: '#fff7ed', borderRadius: 10, borderWidth: 1, borderColor: '#ffedd5' },
-  warnText: { color: '#c2410c', fontSize: 12, fontWeight: 'bold', marginBottom: 8 },
-  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 6 },
-  labelVoice: { fontSize: 13, fontWeight: '600', color: '#4b5563' },
-  voiceBtn: { backgroundColor: '#6b52ae', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
-  voiceBtnActive: { backgroundColor: '#ef4444' },
-  voiceBtnText: { color: '#ffffff', fontSize: 11, fontWeight: 'bold' },
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f0fdf4', // พื้นหลังเขียวอ่อน สบายตา
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#dcfce7',
+  },
+  backButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#166534',
+    fontWeight: '600',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#14532d',
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  warningBanner: {
+    backgroundColor: '#dcfce7',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#86efac',
+  },
+  warningText: {
+    color: '#166534',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#dcfce7',
+    shadowColor: '#166534',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#14532d',
+    marginBottom: 12,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  subHintText: {
+    fontSize: 12,
+    color: '#16a34a',
+    fontWeight: '500',
+    marginBottom: 12,
+  },
+  dateSelector: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 12,
+    padding: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  dateText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#15803d',
+  },
+  dateHintText: {
+    fontSize: 12,
+    color: '#16a34a',
+  },
+  verticalCategoryContainer: {
+    gap: 8,
+  },
+  categoryCard: {
+    backgroundColor: '#f0fdf4',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  categoryCardSelected: {
+    backgroundColor: '#16a34a',
+    borderColor: '#16a34a',
+  },
+  categoryCardText: {
+    fontSize: 15,
+    color: '#15803d',
+    fontWeight: '500',
+  },
+  categoryCardTextSelected: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  categorySubGroup: {
+    marginBottom: 14,
+  },
+  subCategoryTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#166534',
+    marginBottom: 8,
+  },
+  quickOptionContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  quickOptionBtn: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  quickOptionBtnSelected: {
+    backgroundColor: '#dcfce7',
+    borderColor: '#16a34a',
+  },
+  quickOptionText: {
+    fontSize: 13,
+    color: '#475569',
+  },
+  quickOptionTextSelected: {
+    color: '#15803d',
+    fontWeight: 'bold',
+  },
+  textInput: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 12,
+    minHeight: 90,
+    textAlignVertical: 'top',
+    fontSize: 15,
+    color: '#1e293b',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    marginBottom: 12,
+  },
+  micButton: {
+    backgroundColor: '#15803d',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  micButtonActive: {
+    backgroundColor: '#dc2626',
+  },
+  micButtonDisabled: {
+    backgroundColor: '#94a3b8',
+  },
+  micButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  saveButton: {
+    backgroundColor: '#16a34a',
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    shadowColor: '#16a34a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  saveButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });

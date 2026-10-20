@@ -11,8 +11,10 @@ import {
   StyleSheet,
   Modal,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetchLiveMoisture } from '../utils/notify';
 import { s } from '../styles';
-import DailyLogScreen from './DailyLogScreen'; // หน้าบันทึกกิจกรรมรายวันที่เพิ่งอัปเดตปฏิทินและเสียง
+import DailyLogScreen from './DailyLogScreen';
 import PhotoScreen from './PhotoScreen';
 import PlotInfoScreen from './PlotInfoScreen';
 import YieldScreen from './YieldScreen';
@@ -20,6 +22,8 @@ import { USERS as DEFAULT_USERS } from '../data/users';
 
 const HARVEST = 'เกี่ยวข้าวเสร็จแล้ว';
 const DRY_HOURS = 24;
+
+const SESSION_KEYS = ['user', 'token', 'session', 'currentUser'];
 
 const pad = (n) => String(n).padStart(2, '0');
 const formatTime = (ms) => {
@@ -33,7 +37,6 @@ const formatTime = (ms) => {
   );
 };
 
-// ฟังก์ชันคำนวณอายุอัตโนมัติจาก DD/MM/YYYY (พ.ศ.)
 const calculateAge = (dobString, defaultAge) => {
   if (defaultAge) return defaultAge;
   if (!dobString) return null;
@@ -59,16 +62,10 @@ const calculateAge = (dobString, defaultAge) => {
 };
 
 export default function FarmerScreen({ user, logs, onLog, onLogout }) {
-  // สลับการแสดงผลเมนู: 'daily' | 'annual' | 'community'
   const [recordMode, setRecordMode] = useState('daily');
-
-  // State สำหรับพับ/ขยาย Sidebar
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-
-  // State สำหรับ Modal โปรไฟล์
   const [showProfileModal, setShowProfileModal] = useState(false);
 
-  // State สำหรับจำลองการเล่นวิดีโอสอนใช้งาน
   const [isPlaying, setIsPlaying] = useState(false);
   const videoList = [
     { id: 1, title: 'วิดีโอสอนบันทึกกิจกรรมประจำวัน', duration: '02:15 นาที', icon: '📝', desc: 'สอนขั้นตอนการกรอกข้อมูลการใส่ปุ๋ย ให้น้ำ และการดูแลพืช' },
@@ -78,7 +75,6 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
   ];
   const [activeVideo, setActiveVideo] = useState(videoList[0]);
 
-  // State สำหรับระบบแผนการปลูกพืชรายปี & บันทึกเสียง (Voice Support)
   const [selectedMonth, setSelectedMonth] = useState('พฤศจิกายน');
   const [cropName, setCropName] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -93,6 +89,7 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
   ];
 
   const [moisture, setMoisture] = useState('');
+  const [isLiveMoisture, setIsLiveMoisture] = useState(true);
   const [now, setNow] = useState(Date.now());
   const [page, setPage] = useState('home');
 
@@ -101,13 +98,41 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
     return () => clearInterval(t);
   }, []);
 
+  // 🟢 Effect ดึงค่าความชื้นแบบ Real-time ทุก 3 วินาที
+  useEffect(() => {
+    let interval;
+    if (isLiveMoisture) {
+      fetchLiveMoisture().then((val) => {
+        if (val !== null) setMoisture(String(val));
+      });
+
+      interval = setInterval(async () => {
+        const liveValue = await fetchLiveMoisture();
+        if (liveValue !== null) {
+          setMoisture(String(liveValue));
+        }
+      }, 3000);
+    }
+
+    return () => clearInterval(interval);
+  }, [isLiveMoisture]);
+
   const back = () => setPage('home');
-  
-  // ==========================================
-  // เมื่อกดเลือก "บันทึกกิจกรรมวันนี้" ระบบจะเปิดหน้า DailyLogScreen
-  // ==========================================
+
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.multiRemove(SESSION_KEYS);
+    } catch (e) {
+      console.warn('clear session failed', e);
+    }
+    setShowProfileModal(false);
+    setIsSidebarOpen(true);
+    setRecordMode('daily');
+    setPage('home');
+    if (onLogout) onLogout();
+  };
+
   if (page === 'form') return <DailyLogScreen onSave={onLog} onClose={back} />;
-  
   if (page === 'photo') return <PhotoScreen onSave={onLog} onClose={back} />;
   if (page === 'plot') return <PlotInfoScreen onSave={onLog} onClose={back} />;
   if (page === 'yield') return <YieldScreen user={user} onSave={onLog} onClose={back} />;
@@ -125,7 +150,6 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
     Alert.alert('บันทึกแล้ว ✅', 'ความชื้น ' + v + '%');
   };
 
-  // จำลองการถอดรหัสเสียงพูดในเมนู "วางแผนการปลูกรายปี"
   const handleVoiceRecordAnnual = () => {
     setIsListening(true);
     setTimeout(() => {
@@ -180,7 +204,6 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
       );
   }
 
-  // ดึงข้อมูลวันเกิดและอายุ
   const defaultUserInfo = DEFAULT_USERS.find((u) => u.id === user?.id || u.login === user?.login);
   const displayDob = user?.dob || defaultUserInfo?.dob;
   const rawAge = user?.age || defaultUserInfo?.age;
@@ -191,7 +214,7 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
       <StatusBar barStyle="dark-content" backgroundColor="#72c07b" />
 
       <View style={f.mainLayout}>
-        {/* ==================== Sidebar ==================== */}
+        {/* Sidebar */}
         {isSidebarOpen && (
           <View style={f.sidebar}>
             <View style={f.sidebarTop}>
@@ -206,24 +229,24 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
             </View>
 
             <View style={f.sidebarMenu}>
-              <TouchableOpacity 
-                style={[f.sidebarTab, recordMode === 'daily' && f.sidebarTabActive]} 
+              <TouchableOpacity
+                style={[f.sidebarTab, recordMode === 'daily' && f.sidebarTabActive]}
                 onPress={() => setRecordMode('daily')}
               >
                 <Text style={f.sidebarTabIcon}>📅</Text>
                 <Text style={[f.sidebarTabText, recordMode === 'daily' && f.sidebarTabTextActive]}>บันทึกรายวัน</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity 
-                style={[f.sidebarTab, recordMode === 'annual' && f.sidebarTabActive]} 
+              <TouchableOpacity
+                style={[f.sidebarTab, recordMode === 'annual' && f.sidebarTabActive]}
                 onPress={() => setRecordMode('annual')}
               >
                 <Text style={f.sidebarTabIcon}>🗓️</Text>
                 <Text style={[f.sidebarTabText, recordMode === 'annual' && f.sidebarTabTextActive]}>บันทึกรายปี</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity 
-                style={[f.sidebarTab, recordMode === 'community' && f.sidebarTabActive]} 
+              <TouchableOpacity
+                style={[f.sidebarTab, recordMode === 'community' && f.sidebarTabActive]}
                 onPress={() => setRecordMode('community')}
               >
                 <Text style={f.sidebarTabIcon}>👥</Text>
@@ -231,19 +254,17 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={f.logoutBtn} onPress={onLogout}>
+            <TouchableOpacity style={f.logoutBtn} onPress={handleLogout}>
               <Text style={f.logoutText}>ออกจากระบบ</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* ==================== Content Right ==================== */}
+        {/* Content Right */}
         <ScrollView contentContainerStyle={f.contentContainer} showsVerticalScrollIndicator={false}>
-          
-          {/* Header Banner */}
           <View style={f.bannerCard}>
-            <TouchableOpacity 
-              style={f.toggleSidebarBtn} 
+            <TouchableOpacity
+              style={f.toggleSidebarBtn}
               onPress={() => setIsSidebarOpen(!isSidebarOpen)}
             >
               <Text style={f.toggleSidebarIcon}>{isSidebarOpen ? '◀' : '☰'}</Text>
@@ -260,9 +281,7 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
             </TouchableOpacity>
           </View>
 
-          {/* สลับหน้าตามโหมด */}
           {recordMode === 'community' ? (
-            /* ==================== แดชบอร์ดกลุ่ม ==================== */
             <>
               <View style={f.sectionCard}>
                 <Text style={f.sectionTitle}>👥 ภาพรวมกลุ่มเกษตรกรแปลงใหญ่ ต.ผักไหม</Text>
@@ -302,7 +321,6 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
               </View>
             </>
           ) : recordMode === 'daily' ? (
-            /* ==================== บันทึกรายวัน ==================== */
             <>
               <View style={f.statusCard}>
                 <Text style={f.sectionTitle}>📊 สถานะการประเมินและแปลงปลูก</Text>
@@ -322,7 +340,6 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
 
               {timerBox}
 
-              {/* การเรียกใช้ DailyLogScreen จะเกิดเมื่อกดปุ่มนี้ */}
               <View style={f.sectionCard}>
                 <Text style={f.sectionTitle}>📝 เมนูบันทึกกิจกรรมประจำวัน</Text>
                 <View style={f.grid}>
@@ -342,14 +359,14 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
 
               <View style={f.sectionCard}>
                 <Text style={f.sectionTitle}>🎥 วิดีโอสอนวิธีใช้งานตามฟังก์ชัน</Text>
-                
+
                 <View style={f.videoWrapper}>
                   <View style={f.videoPlayerContainer}>
                     <Text style={{ fontSize: 32 }}>🎬</Text>
                     <Text style={f.videoPlayingTitle} numberOfLines={2}>{activeVideo.title}</Text>
                     <Text style={f.videoPlayingDuration}>⏱️ ความยาว: {activeVideo.duration}</Text>
                     <Text style={f.videoDescText}>{activeVideo.desc}</Text>
-                    
+
                     <TouchableOpacity style={f.playBtn} onPress={() => setIsPlaying(!isPlaying)}>
                       <Text style={f.playBtnText}>{isPlaying ? '⏸️ หยุดเล่นวิดีโอ' : '▶️ เล่นวิดีโอ'}</Text>
                     </TouchableOpacity>
@@ -364,8 +381,8 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
                   {videoList.map((item) => {
                     const isSelected = activeVideo.id === item.id;
                     return (
-                      <TouchableOpacity 
-                        key={item.id} 
+                      <TouchableOpacity
+                        key={item.id}
                         style={[f.videoItem, isSelected && f.videoItemActive]}
                         onPress={() => handleSelectVideo(item)}
                       >
@@ -385,15 +402,32 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
                 </View>
               </View>
 
+              {/* 🟢 การ์ดวัดความชื้น Real-time */}
               <View style={f.sectionCard}>
-                <Text style={f.sectionTitle}>💧 วัดและบันทึกความชื้นข้าวเปลือก</Text>
-                <Text style={s.label}>ค่าความชื้นที่วัดได้ (%)</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={f.sectionTitle}>💧 วัดและบันทึกความชื้นข้าวเปลือก</Text>
+                  
+                  <TouchableOpacity 
+                    style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0fdf4', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#bbf7d0' }}
+                    onPress={() => setIsLiveMoisture(!isLiveMoisture)}
+                  >
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isLiveMoisture ? '#22c55e' : '#ef4444', marginRight: 6 }} />
+                    <Text style={{ fontSize: 10, color: '#166534', fontWeight: 'bold' }}>
+                      {isLiveMoisture ? '● เรียลไทม์' : '○ พิมพ์เอง'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={s.label}>ค่าความชื้นจากเซนเซอร์ปัจจุบัน (%)</Text>
                 <TextInput
-                  style={[s.input, f.customInput]}
+                  style={[s.input, f.customInput, { fontWeight: 'bold', color: '#1b5e20', fontSize: 15 }]}
                   value={moisture}
-                  onChangeText={setMoisture}
+                  onChangeText={(val) => {
+                    setMoisture(val);
+                    setIsLiveMoisture(false);
+                  }}
                   keyboardType="numeric"
-                  placeholder="เช่น 14"
+                  placeholder="กำลังดึงข้อมูลจากเซนเซอร์..."
                   placeholderTextColor="#a1a1a1"
                 />
                 <TouchableOpacity style={[s.bigBtn, { backgroundColor: '#2e7d32', marginTop: 10 }]} onPress={saveMoisture}>
@@ -402,7 +436,6 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
               </View>
             </>
           ) : (
-            /* ==================== บันทึกรายปี ==================== */
             <>
               <View style={f.sectionCard}>
                 <Text style={f.sectionTitle}>🌱 วางแผนงานการปลูกพืชประจำปี (Voice Support)</Text>
@@ -516,7 +549,7 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
         </ScrollView>
       </View>
 
-      {/* ==================== Modal Profile ==================== */}
+      {/* Modal Profile */}
       <Modal visible={showProfileModal} animationType="fade" transparent>
         <View style={f.modalOverlay}>
           <View style={f.modalCard}>
@@ -559,8 +592,8 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
               <Text style={[f.infoValue, { color: '#2e7d32' }]}>ผ่านการรับรอง</Text>
             </View>
 
-            <TouchableOpacity 
-              style={f.closeModalBtn} 
+            <TouchableOpacity
+              style={f.closeModalBtn}
               onPress={() => setShowProfileModal(false)}
             >
               <Text style={f.closeModalText}>ปิดหน้าต่าง</Text>
@@ -652,7 +685,6 @@ const f = StyleSheet.create({
   greenDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#4caf50' },
   statusText: { color: '#2e7d32', fontSize: 10, fontWeight: 'bold' },
 
-  /* วิดีโอสไตล์เดิม */
   videoWrapper: { backgroundColor: '#1b5e20', borderRadius: 12, padding: 12 },
   videoPlayerContainer: { backgroundColor: '#2e7d32', borderRadius: 10, padding: 14, alignItems: 'center' },
   videoPlayingTitle: { color: '#ffffff', fontSize: 12, fontWeight: 'bold', textAlign: 'center', marginTop: 4 },
@@ -680,7 +712,6 @@ const f = StyleSheet.create({
     borderRadius: 12,
   },
 
-  /* Month Chips and Voice Button Styles */
   monthChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -790,6 +821,7 @@ const f = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
+  
   modalCard: { width: '85%', backgroundColor: '#ffffff', borderRadius: 16, padding: 20, alignItems: 'center', elevation: 5 },
   modalAvatarCircle: {
     width: 64,
