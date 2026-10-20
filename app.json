@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "FarmerApp",
+    "slug": "FarmerApp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.farmerapp.app"
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "buildToolsVersion": "34.0.0",
+            "kotlinVersion": "1.9.23",
+            "permissions": [
+              "android.permission.RECORD_AUDIO"
+            ]
+          },
+          "ios": {
+            "infoPlist": {
+              "NSMicrophoneUsageDescription": "แอปพลิเคชันต้องการใช้ไมโครโฟนเพื่อรับคำสั่งเสียงในการบันทึกข้อมูล",
+              "NSSpeechRecognitionUsageDescription": "แอปพลิเคชันต้องการใช้ระบบรู้จำเสียงเพื่อแปลงเสียงพูดเป็นข้อความ"
+            }
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "6c064ae8-dafc-4bb3-a359-3a58f3b3c0f4"
+      }
+    }
+  }
+}
