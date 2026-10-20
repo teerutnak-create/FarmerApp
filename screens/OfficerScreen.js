@@ -12,8 +12,9 @@ import {
   Switch,
   Modal,
   TextInput,
+  Platform,
 } from 'react-native';
-import { s } from '../styles';
+import { USERS } from '../data/users';
 
 export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRefresh, onSaveLogForFarmer }) {
   const [currentPage, setCurrentPage] = useState('home');
@@ -45,12 +46,24 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
   ]);
   const [lotId, setLotId] = useState('');
 
-  const farmersList = allUsers ? allUsers.filter((u) => u.role === 'farmer') : [];
+  // 🟢 ดึงข้อมูลเกษตรกรจาก Props หรือ Fallback ไปยังข้อมูลดั้งเดิมใน USERS
+  const farmersList = (allUsers && allUsers.length > 0 ? allUsers : USERS).filter(
+    (u) => u.role === 'farmer'
+  );
+
+  // ฟังก์ชันแสดงการแจ้งเตือนรองรับทั้ง Web และ Mobile
+  const showAlert = (title, message) => {
+    if (Platform.OS === 'web') {
+      window.alert(`${title}\n${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
 
   // ตรวจสอบความครบถ้วนของข้อมูลเกษตรกร
   const checkFarmerCompleteness = (farmerId) => {
     const farmerLogs = logs ? logs.filter((l) => l.farmerId === farmerId) : [];
-    const hasActivity = farmerLogs.some((l) => l.type === 'บันทึกรายวัน' || l.activity);
+    const hasActivity = farmerLogs.some((l) => l.type === 'บันทึกรายวัน' || l.activity || l.water || l.fertilizer);
     const hasMoisture = farmerLogs.some((l) => l.type === 'วัดความชื้น' || l.moisture !== undefined);
     const hasPhoto = farmerLogs.some((l) => l.type === 'ถ่ายรูปแปลง' || l.photoUri);
 
@@ -79,7 +92,7 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
 
   const handleSaveOfficerEntry = () => {
     if (!officerNote.trim() && !officerMoisture.trim()) {
-      Alert.alert('กรอกข้อมูล', 'กรุณาระบุรายละเอียดหรือค่าความชื้นที่ต้องการเติม');
+      showAlert('กรอกข้อมูล', 'กรุณาระบุรายละเอียดหรือค่าความชื้นที่ต้องการเติม');
       return;
     }
 
@@ -94,10 +107,10 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
         byOfficer: true,
       });
 
-      Alert.alert('เพิ่มข้อมูลสำเร็จ ✅', `บันทึกข้อมูลเพิ่มเติมให้ คุณ${targetFarmerForAdd.name} เรียบร้อยแล้ว`);
+      showAlert('เพิ่มข้อมูลสำเร็จ ✅', `บันทึกข้อมูลเพิ่มเติมให้ คุณ${targetFarmerForAdd.name} เรียบร้อยแล้ว`);
       setShowAddLogModal(false);
     } else {
-      Alert.alert('สำเร็จ', 'บันทึกข้อมูลลงระบบเรียบร้อยแล้ว');
+      showAlert('สำเร็จ', 'บันทึกข้อมูลลงระบบเรียบร้อยแล้ว');
       setShowAddLogModal(false);
     }
   };
@@ -108,19 +121,19 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
 
   const handleCaptureGIS = () => {
     setGpsConnected(true);
-    Alert.alert('ดึงพิกัดสำเร็จ 📍', 'GPS High-Precision (±1.5m)');
+    showAlert('ดึงพิกัดสำเร็จ 📍', 'GPS High-Precision (±1.5m)');
   };
 
   const handleConnectBluetooth = () => {
     setBtConnected(true);
     setSensorData({ moisture: '68.5', temp: '28.4' });
-    Alert.alert('เชื่อมต่อสำเร็จ 📡', 'BT-SENSOR-09 อ่านค่าเรียบร้อย');
+    showAlert('เชื่อมต่อสำเร็จ 📡', 'BT-SENSOR-09 อ่านค่าเรียบร้อย');
   };
 
   const handleSubmitAudit = () => {
     const generatedLot = 'PKM-20261008-089-A' + Math.floor(Math.random() * 9 + 1);
     setLotId(generatedLot);
-    Alert.alert('อนุมัติสำเร็จ ✅', `รหัสล็อตสินค้า: ${generatedLot}`);
+    showAlert('อนุมัติสำเร็จ ✅', `รหัสล็อตสินค้า: ${generatedLot}`);
   };
 
   return (
@@ -140,7 +153,7 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
             </TouchableOpacity>
           </View>
 
-          <Text style={o.profileName}>นายสมชาย ใจดี <Text style={o.profileSub}>(OFF-2026-0089)</Text></Text>
+          <Text style={o.profileName}>เจ้าหน้าที่สมศรี <Text style={o.profileSub}>(OFF-2026-0089)</Text></Text>
           <Text style={o.profileRole}>ตำแหน่ง: Senior GAP Auditor (Level 2)</Text>
         </View>
 
@@ -177,14 +190,14 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
               <View style={o.mapSimContainer}>
                 <TouchableOpacity
                   style={[o.mapPin, { top: '20%', left: '15%', backgroundColor: '#2e7d32' }]}
-                  onPress={() => Alert.alert('แปลงไร่สุขใจ (นายสมศักดิ์)', 'พิกัด: Lat 15.1186, Long 104.3220\nสถานะ: ข้อมูลครบถ้วน (พร้อมออก QR)')}
+                  onPress={() => showAlert('แปลงลุงสมหมาย (f001)', 'พิกัด: Lat 15.1186, Long 104.3220\nสถานะ: ข้อมูลครบถ้วน')}
                 >
-                  <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>📍 แปลงไร่สุขใจ (Lat: 15.1186)</Text>
+                  <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>📍 แปลงลุงสมหมาย (Lat: 15.1186)</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[o.mapPin, { bottom: '25%', right: '15%', backgroundColor: '#d97706' }]}
-                  onPress={() => Alert.alert('แปลงป้าสมศรี (นางสมศรี)', 'พิกัด: Lat 15.1205, Long 104.3255\nสถานะ: ข้อมูลยังไม่ครบ (รอวัดความชื้น)')}
+                  onPress={() => showAlert('แปลงป้าสมศรี (f002)', 'พิกัด: Lat 15.1205, Long 104.3255\nสถานะ: รอวัดความชื้น')}
                 >
                   <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>📍 แปลงป้าสมศรี (Lat: 15.1205)</Text>
                 </TouchableOpacity>
@@ -213,7 +226,7 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                     </View>
 
                     <Text style={o.queueName}>คุณ{farmer.name}</Text>
-                    <Text style={o.queueDesc}>เบอร์โทรศัพท์: {farmer.login}</Text>
+                    <Text style={o.queueDesc}>เบอร์โทรศัพท์: {farmer.login} | อายุ: {farmer.age} ปี (เกิด {farmer.dob})</Text>
 
                     {/* สรุปสถานะความครบถ้วนของหัวข้อ */}
                     <View style={o.checkStatusGroup}>
@@ -254,9 +267,11 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
               })}
             </View>
 
-            <TouchableOpacity onPress={onClear} style={{ marginTop: 10 }}>
-              <Text style={s.clear}>🗑 ล้างข้อมูลบันทึกทั้งหมด</Text>
-            </TouchableOpacity>
+            {onClear && (
+              <TouchableOpacity onPress={onClear} style={{ marginTop: 10 }}>
+                <Text style={{ color: '#ef4444', textAlign: 'center', fontWeight: 'bold', fontSize: 12 }}>🗑 ล้างข้อมูลบันทึกทั้งหมด</Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
         ) : (
           /* ======================================================== */
@@ -269,7 +284,7 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
               </TouchableOpacity>
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>ตรวจแปลง: คุณ{selectedFarmer?.name}</Text>
-                <Text style={{ color: '#e8f5e9', fontSize: 10 }}>รหัสเกษตรกร: {selectedFarmer?.id}</Text>
+                <Text style={{ color: '#e8f5e9', fontSize: 10 }}>รหัสเกษตรกร: {selectedFarmer?.id} | เบอร์โทร: {selectedFarmer?.login}</Text>
               </View>
             </View>
 
@@ -300,8 +315,8 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                     </View>
                   ))}
 
-                  <TouchableOpacity style={[s.bigBtn, { backgroundColor: '#2e7d32', marginTop: 14 }]} onPress={handleSubmitAudit}>
-                    <Text style={s.bigBtnText}>อนุมัติปล่อยล็อตสินค้า & ออก QR ➔</Text>
+                  <TouchableOpacity style={[o.bigBtn, { backgroundColor: '#2e7d32', marginTop: 14 }]} onPress={handleSubmitAudit}>
+                    <Text style={o.bigBtnText}>อนุมัติปล่อยล็อตสินค้า & ออก QR ➔</Text>
                   </TouchableOpacity>
 
                   {lotId !== '' && (
@@ -336,8 +351,8 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                   <View style={o.scannerBox}>
                     <Text style={{ fontSize: 36, marginBottom: 6 }}>📷</Text>
                     <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1b5e20' }}>ถ่ายภาพใบหรือลำต้นผักไหม</Text>
-                    <TouchableOpacity style={[s.bigBtn, { backgroundColor: '#388e3c', marginTop: 12 }]} onPress={() => setAiScanned(true)}>
-                      <Text style={s.bigBtnText}>เริ่มวิเคราะห์ด้วย AI</Text>
+                    <TouchableOpacity style={[o.bigBtn, { backgroundColor: '#388e3c', marginTop: 12 }]} onPress={() => setAiScanned(true)}>
+                      <Text style={o.bigBtnText}>เริ่มวิเคราะห์ด้วย AI</Text>
                     </TouchableOpacity>
                   </View>
 
@@ -383,17 +398,17 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                 เจ้าหน้าที่สามารถช่วยเติมบันทึกกิจกรรมหรือค่าความชื้นแทนเกษตรกรได้
               </Text>
 
-              <Text style={s.label}>บันทึกรายละเอียดกิจกรรม</Text>
+              <Text style={o.inputLabel}>บันทึกรายละเอียดกิจกรรม</Text>
               <TextInput
-                style={[s.input, o.customInput]}
+                style={o.customInput}
                 placeholder="เช่น ใส่ปุ๋ยอินทรีย์ 2 กระสอบ"
                 value={officerNote}
                 onChangeText={setOfficerNote}
               />
 
-              <Text style={s.label}>ค่าความชื้นที่วัดได้ (%) [ถ้ามี]</Text>
+              <Text style={o.inputLabel}>ค่าความชื้นที่วัดได้ (%) [ถ้ามี]</Text>
               <TextInput
-                style={[s.input, o.customInput]}
+                style={o.customInput}
                 placeholder="เช่น 14.5"
                 keyboardType="numeric"
                 value={officerMoisture}
@@ -402,17 +417,17 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
 
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
                 <TouchableOpacity
-                  style={[s.bigBtn, { flex: 1, backgroundColor: '#9ca3af' }]}
+                  style={[o.bigBtn, { flex: 1, backgroundColor: '#9ca3af' }]}
                   onPress={() => setShowAddLogModal(false)}
                 >
-                  <Text style={s.bigBtnText}>ยกเลิก</Text>
+                  <Text style={o.bigBtnText}>ยกเลิก</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[s.bigBtn, { flex: 1, backgroundColor: '#2e7d32' }]}
+                  style={[o.bigBtn, { flex: 1, backgroundColor: '#2e7d32' }]}
                   onPress={handleSaveOfficerEntry}
                 >
-                  <Text style={s.bigBtnText}>บันทึกข้อมูล</Text>
+                  <Text style={o.bigBtnText}>บันทึกข้อมูล</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -494,8 +509,28 @@ const o = StyleSheet.create({
   checkRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f1f8e9', padding: 6, borderRadius: 8, marginBottom: 6, borderWidth: 1, borderColor: '#c8e6c9' },
   qrBox: { backgroundColor: '#e8f5e9', padding: 12, borderRadius: 10, alignItems: 'center', marginTop: 10, borderWidth: 1, borderColor: '#a5d6a7' },
 
+  bigBtn: {
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bigBtnText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
+
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#2e7d32',
+    marginTop: 8,
+    marginBottom: 4,
+  },
   customInput: {
     borderColor: '#a5d6a7',
+    borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 10,
     height: 40,
