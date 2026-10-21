@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import MapView, { Polygon, Marker } from 'react-native-maps';
 import {
   View,
   Text,
@@ -15,6 +16,9 @@ import {
   Platform,
 } from 'react-native';
 import { USERS } from '../data/users';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+
 
 export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRefresh, onSaveLogForFarmer }) {
   const [currentPage, setCurrentPage] = useState('home');
@@ -30,11 +34,28 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
   // States สำหรับ GIS & GPS
   const [coords, setCoords] = useState('Lat: 15.118624, Long: 104.322015');
   const [gpsConnected, setGpsConnected] = useState(false);
+  // --- โค้ดส่วนที่เพิ่มใหม่สำหรับแผนที่ GIS ---
+  const [polygonPoints, setPolygonPoints] = useState([]); // เก็บชุดพิกัดที่เจ้าหน้าที่จิ้ม
+
+  // ฟังก์ชันเวลานิ้วจิ้มบนแผนที่
+  const handleMapPress = (event) => {
+    const { coordinate } = event.nativeEvent;
+    setPolygonPoints((currentPoints) => [...currentPoints, coordinate]);
+  };
+
+  // ฟังก์ชันล้างพื้นที่เพื่อเริ่มวาดใหม่
+  const clearPolygon = () => {
+    setPolygonPoints([]);
+  };
+  // ------------------------------------
 
   // States สำหรับ AI & Sensor
-  const [aiScanned, setAiScanned] = useState(false);
+  const [aiHistory, setAiHistory] = useState({}); // เก็บประวัติการสแกนทั้งหมด
+  const [aiLoading, setAiLoading] = useState(false); // <--- เพิ่ม: ทำสถานะกำลังโหลด
   const [btConnected, setBtConnected] = useState(false);
   const [sensorData, setSensorData] = useState({ moisture: '--', temp: '--' });
+
+  
 
   // GAP Checklist
   const [gapItems, setGapItems] = useState([
@@ -134,6 +155,81 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
     const generatedLot = 'PKM-20261008-089-A' + Math.floor(Math.random() * 9 + 1);
     setLotId(generatedLot);
     showAlert('อนุมัติสำเร็จ ✅', `รหัสล็อตสินค้า: ${generatedLot}`);
+  };
+
+  // ฟังก์ชันยิง API ไปหาเซิร์ฟเวอร์ Python AI
+// ฟังก์ชันเปิดอัลบั้มรูป และยิง API ไปหาเซิร์ฟเวอร์ Python AI
+// ฟังก์ชันเปิดอัลบั้มรูป และอัปโหลดด้วย FileSystem
+  // ฟังก์ชันเปิดอัลบั้มรูป และอัปโหลดด้วย FileSystem
+  const handleScanAI = async () => {
+    let permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permissionResult.granted === false) {
+      showAlert('แจ้งเตือน', 'ต้องขออนุญาตเข้าถึงรูปภาพก่อนครับ');
+      return;
+    }
+
+    let pickerResult = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true, 
+      aspect: [1, 1], 
+      quality: 0.8,
+    });
+
+    if (pickerResult.canceled) {
+      return; 
+    }
+
+    const realImageUri = pickerResult.assets[0].uri;
+
+    setAiLoading(true);
+    // ลบ setAiScanned และ setAiResult ที่เคยมีตรงนี้ออกไปหมดแล้ว
+
+    try {
+      const uploadResult = await FileSystem.uploadAsync(
+        'http://192.168.137.1:5000/predict',
+        realImageUri,
+        {
+          httpMethod: 'POST',
+          uploadType: 1, 
+          fieldName: 'file',
+        }
+      );
+
+      const result = JSON.parse(uploadResult.body);
+      
+      if (uploadResult.status === 200) {
+        // ประทับตราวันที่และเวลาปัจจุบัน (แบบไทย)
+        const now = new Date();
+        const timeString = now.toLocaleString('th-TH');
+
+        // สร้างก้อนข้อมูลประวัติ 1 รายการ
+        const newRecord = {
+          id: Date.now().toString(), // สร้างรหัสไม่ซ้ำกัน
+          image: realImageUri,       // รูปที่ถ่าย
+          result: result,            // ผลที่ AI วิเคราะห์ได้
+          timestamp: timeString      // เวลาที่สแกน
+        };
+
+        // เอาประวัติใหม่ไปต่อหน้าประวัติเก่า โดยแยกเก็บตาม ID ของเกษตรกรที่กำลังเลือกอยู่
+        setAiHistory((prevHistory) => {
+          const currentFarmerId = selectedFarmer.id; // ดึง ID เกษตรกรคนปัจจุบัน
+          const existingHistory = prevHistory[currentFarmerId] || []; // ดึงประวัติเดิมของคนนี้มา
+          
+          return {
+            ...prevHistory,
+            [currentFarmerId]: [newRecord, ...existingHistory] // ยัดของใหม่ใส่ลิ้นชักของคนนี้
+          };
+        });
+
+      } else {
+        showAlert('แจ้งเตือนจากเซิร์ฟเวอร์', result.error || 'เกิดข้อผิดพลาดในการวิเคราะห์');
+      }
+    } catch (error) {
+      console.error(error);
+      showAlert('เชื่อมต่อไม่ได้', 'กรุณาตรวจสอบว่าเซิร์ฟเวอร์รันอยู่ และใช้ WiFi เดียวกัน');
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   return (
@@ -334,12 +430,55 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
               )}
 
               {auditTab === 'gis' && (
-                <View style={o.sectionCard}>
-                  <Text style={o.sectionTitle}>🗺️ ปักหมุด GIS & GPS Polygon</Text>
-                  <View style={o.darkBox}>
-                    <Text style={{ color: '#cbd5e1', fontSize: 12, marginBottom: 8 }}>{coords}</Text>
-                    <TouchableOpacity style={o.greenBtn} onPress={handleCaptureGIS}>
-                      <Text style={o.greenBtnText}>📍 ดึงพิกัดและสร้าง Polygon ขอบเขตแปลง</Text>
+                <View style={{ marginTop: 15, paddingHorizontal: 15 }}>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10, color: '#2e7d32' }}>
+                    🗺️ ปักหมุด GIS & GPS Polygon
+                  </Text>
+                  
+                  {/* กรอบแสดงแผนที่ดาวเทียม */}
+                  <View style={{ height: 400, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#ddd' }}>
+                    <MapView
+                      style={{ flex: 1 }}
+                      initialRegion={{
+                        latitude: 15.118624,
+                        longitude: 104.322015,
+                        latitudeDelta: 0.005,
+                        longitudeDelta: 0.005,
+                      }}
+                      mapType="satellite"
+                      onPress={handleMapPress}
+                    >
+                      {/* วาดหมุดสีแดง */}
+                      {polygonPoints.map((point, index) => (
+                        <Marker key={index} coordinate={point} pinColor="red" />
+                      ))}
+
+                      {/* วาด Polygon สีเขียวโปร่งแสง เมื่อจิ้มครบ 3 จุดขึ้นไป */}
+                      {polygonPoints.length >= 3 && (
+                        <Polygon
+                          coordinates={polygonPoints}
+                          fillColor="rgba(46, 125, 50, 0.4)"
+                          strokeColor="#2e7d32"
+                          strokeWidth={3}
+                        />
+                      )}
+                    </MapView>
+                  </View>
+
+                  {/* ปุ่มควบคุมด้านล่างแผนที่ */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 15, marginBottom: 20 }}>
+                    <TouchableOpacity 
+                      onPress={clearPolygon}
+                      style={{ padding: 12, backgroundColor: '#f44336', borderRadius: 8, flex: 1, marginRight: 5, alignItems: 'center' }}
+                    >
+                      <Text style={{ color: '#fff', fontWeight: 'bold' }}>ลบวาดใหม่</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      onPress={() => alert(`บันทึกพิกัดทั้งหมด ${polygonPoints.length} จุดสำเร็จ!`)}
+                      style={{ padding: 12, backgroundColor: '#2e7d32', borderRadius: 8, flex: 1, marginLeft: 5, alignItems: 'center' }}
+                    >
+                      <Text style={{ color: '#fff', fontWeight: 'bold' }}>บันทึกพื้นที่แปลง</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -351,17 +490,41 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                   <View style={o.scannerBox}>
                     <Text style={{ fontSize: 36, marginBottom: 6 }}>📷</Text>
                     <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1b5e20' }}>ถ่ายภาพใบหรือลำต้นผักไหม</Text>
-                    <TouchableOpacity style={[o.bigBtn, { backgroundColor: '#388e3c', marginTop: 12 }]} onPress={() => setAiScanned(true)}>
-                      <Text style={o.bigBtnText}>เริ่มวิเคราะห์ด้วย AI</Text>
+                    
+                    {/* เปลี่ยน onPress ให้มาเรียกฟังก์ชัน handleScanAI แทนของเดิม */}
+                    <TouchableOpacity 
+                      style={[o.bigBtn, { backgroundColor: '#388e3c', marginTop: 12, opacity: aiLoading ? 0.7 : 1 }]} 
+                      onPress={handleScanAI}
+                      disabled={aiLoading}
+                    >
+                      <Text style={o.bigBtnText}>{aiLoading ? 'กำลังวิเคราะห์ด้วย AI...' : 'เริ่มวิเคราะห์ด้วย AI'}</Text>
                     </TouchableOpacity>
                   </View>
 
-                  {aiScanned && (
-                    <View style={o.aiResultBox}>
-                      <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#2e7d32' }}>✅ ผลการวิเคราะห์ AI (Accuracy 98.4%):</Text>
-                      <Text style={{ fontSize: 12, color: '#1f2937', marginTop: 2 }}>ไม่พบโรคพืชรุนแรง / สภาพลำต้นสมบูรณ์</Text>
+                  {/* แสดงประวัติการสแกนทั้งหมด โดยดึงมาเฉพาะของเกษตรกรคนปัจจุบัน */}
+                  {(aiHistory[selectedFarmer?.id] || []).map((item) => (
+                    <View key={item.id} style={[o.aiResultBox, { marginTop: 15 }]}>
+                      {/* แสดงรูปภาพเล็กๆ และเวลา */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                        <Image source={{ uri: item.image }} style={{ width: 60, height: 60, borderRadius: 8, marginRight: 10 }} />
+                        <View>
+                          <Text style={{ fontSize: 11, color: '#666' }}>🕒 เวลาที่สแกน:</Text>
+                          <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#333' }}>{item.timestamp}</Text>
+                        </View>
+                      </View>
+
+                      {/* ผลการวิเคราะห์ */}
+                      <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#2e7d32' }}>
+                        ✅ ผลการวิเคราะห์ AI (ความมั่นใจ {item.result.accuracy}):
+                      </Text>
+                      <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#b91c1c', marginTop: 6 }}>
+                        ตรวจพบ: {item.result.disease}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#1f2937', marginTop: 4 }}>
+                        คำแนะนำ: {item.result.advice}
+                      </Text>
                     </View>
-                  )}
+                  ))}
                 </View>
               )}
 
