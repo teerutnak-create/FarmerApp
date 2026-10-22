@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import MapView, { Polygon, Marker } from 'react-native-maps';
+//import MapView, { Polygon, Marker } from 'react-native-maps';
 import {
   View,
   Text,
@@ -435,7 +435,8 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                     🗺️ ปักหมุด GIS & GPS Polygon
                   </Text>
                   
-                  {/* กรอบแสดงแผนที่ดาวเทียม */}
+                  {/* กรอบแสดงแผนที่ดาวเทียม (ปิดไว้ชั่วคราวเพื่อรันบนเว็บ) */}
+                  {/* 
                   <View style={{ height: 400, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#ddd' }}>
                     <MapView
                       style={{ flex: 1 }}
@@ -448,12 +449,10 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                       mapType="satellite"
                       onPress={handleMapPress}
                     >
-                      {/* วาดหมุดสีแดง */}
                       {polygonPoints.map((point, index) => (
                         <Marker key={index} coordinate={point} pinColor="red" />
                       ))}
 
-                      {/* วาด Polygon สีเขียวโปร่งแสง เมื่อจิ้มครบ 3 จุดขึ้นไป */}
                       {polygonPoints.length >= 3 && (
                         <Polygon
                           coordinates={polygonPoints}
@@ -464,6 +463,7 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                       )}
                     </MapView>
                   </View>
+                  */}
 
                   {/* ปุ่มควบคุมด้านล่างแผนที่ */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 15, marginBottom: 20 }}>
