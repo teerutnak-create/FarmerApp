@@ -53,8 +53,7 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
   const [aiHistory, setAiHistory] = useState({}); // เก็บประวัติการสแกนทั้งหมด
   const [aiLoading, setAiLoading] = useState(false); // <--- เพิ่ม: ทำสถานะกำลังโหลด
   const [btConnected, setBtConnected] = useState(false);
-  const [sensorData, setSensorData] = useState({ moisture: '--', temp: '--' });
-
+  const [sensorData, setSensorData] = useState({ moisture: '--', temp: '--', sunlight: '--', rain: '--' });
   
 
   // GAP Checklist
@@ -147,7 +146,8 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
 
   const handleConnectBluetooth = () => {
     setBtConnected(true);
-    setSensorData({ moisture: '68.5', temp: '28.4' });
+    // เติมค่า sunlight (แสงแดด) และ rain (น้ำฝน) เข้าไป
+    setSensorData({ moisture: '68.5', temp: '28.4', sunlight: '45000', rain: '15' });
     showAlert('เชื่อมต่อสำเร็จ 📡', 'BT-SENSOR-09 อ่านค่าเรียบร้อย');
   };
 
@@ -532,7 +532,9 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                 <View style={o.sectionCard}>
                   <Text style={o.sectionTitle}>📡 IoT Soil & Environment Reader</Text>
                   <View style={o.darkBox}>
-                    <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+                    
+                    {/* แถวที่ 1: ความชื้น & อุณหภูมิ */}
+                    <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
                       <View style={o.sensorMetric}>
                         <Text style={{ color: '#c8e6c9', fontSize: 11 }}>ความชื้นดิน</Text>
                         <Text style={{ color: '#81c784', fontSize: 20, fontWeight: 'bold' }}>{sensorData.moisture} %</Text>
@@ -542,6 +544,19 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                         <Text style={{ color: '#fbbf24', fontSize: 20, fontWeight: 'bold' }}>{sensorData.temp} °C</Text>
                       </View>
                     </View>
+
+                    {/* แถวที่ 2: แสงแดด & ปริมาณน้ำฝน (เพิ่มใหม่) */}
+                    <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+                      <View style={o.sensorMetric}>
+                        <Text style={{ color: '#c8e6c9', fontSize: 11 }}>แสงแดด</Text>
+                        <Text style={{ color: '#60a5fa', fontSize: 20, fontWeight: 'bold' }}>{sensorData.sunlight} lux</Text>
+                      </View>
+                      <View style={o.sensorMetric}>
+                        <Text style={{ color: '#c8e6c9', fontSize: 11 }}>ปริมาณน้ำฝน</Text>
+                        <Text style={{ color: '#a78bfa', fontSize: 20, fontWeight: 'bold' }}>{sensorData.rain} mm</Text>
+                      </View>
+                    </View>
+
                     <TouchableOpacity style={[o.greenBtn, { backgroundColor: '#0284c7' }]} onPress={handleConnectBluetooth}>
                       <Text style={o.greenBtnText}>เชื่อมต่อเซนเซอร์</Text>
                     </TouchableOpacity>
