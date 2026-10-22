@@ -185,48 +185,55 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
     // ลบ setAiScanned และ setAiResult ที่เคยมีตรงนี้ออกไปหมดแล้ว
 
     try {
-      const uploadResult = await FileSystem.uploadAsync(
-        'http://192.168.137.1:5000/predict',
-        realImageUri,
-        {
-          httpMethod: 'POST',
-          uploadType: 1, 
-          fieldName: 'file',
-        }
-      );
-
-      const result = JSON.parse(uploadResult.body);
+      // 1. จัดเตรียมไฟล์รูปภาพให้รองรับทั้ง Web และ Mobile
+      const formData = new FormData();
       
-      if (uploadResult.status === 200) {
+      if (Platform.OS === 'web') {
+        const response = await fetch(realImageUri);
+        const blob = await response.blob();
+        formData.append('file', blob, 'upload.jpg');
+      } else {
+        formData.append('file', {
+          uri: realImageUri,
+          name: 'upload.jpg',
+          type: 'image/jpeg',
+        });
+      }
+
+      // 2. ส่งข้อมูลไปที่ VS Code (อย่าลืมเปลี่ยนลิงก์ด้านล่าง และต้องมี /predict ต่อท้าย)
+      const res = await fetch('ใส่ลิงก์ของคุณที่นี่/predict', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await res.json();
+      
+      if (res.ok) {
         // ประทับตราวันที่และเวลาปัจจุบัน (แบบไทย)
         const now = new Date();
         const timeString = now.toLocaleString('th-TH');
 
-        // สร้างก้อนข้อมูลประวัติ 1 รายการ
         const newRecord = {
-          id: Date.now().toString(), // สร้างรหัสไม่ซ้ำกัน
-          image: realImageUri,       // รูปที่ถ่าย
-          result: result,            // ผลที่ AI วิเคราะห์ได้
-          timestamp: timeString      // เวลาที่สแกน
+          id: Date.now().toString(),
+          image: realImageUri,
+          result: result,
+          timestamp: timeString
         };
 
-        // เอาประวัติใหม่ไปต่อหน้าประวัติเก่า โดยแยกเก็บตาม ID ของเกษตรกรที่กำลังเลือกอยู่
         setAiHistory((prevHistory) => {
-          const currentFarmerId = selectedFarmer.id; // ดึง ID เกษตรกรคนปัจจุบัน
-          const existingHistory = prevHistory[currentFarmerId] || []; // ดึงประวัติเดิมของคนนี้มา
-          
+          const currentFarmerId = selectedFarmer.id;
+          const existingHistory = prevHistory[currentFarmerId] || [];
           return {
             ...prevHistory,
-            [currentFarmerId]: [newRecord, ...existingHistory] // ยัดของใหม่ใส่ลิ้นชักของคนนี้
+            [currentFarmerId]: [newRecord, ...existingHistory]
           };
         });
-
       } else {
         showAlert('แจ้งเตือนจากเซิร์ฟเวอร์', result.error || 'เกิดข้อผิดพลาดในการวิเคราะห์');
       }
     } catch (error) {
       console.error(error);
-      showAlert('เชื่อมต่อไม่ได้', 'กรุณาตรวจสอบว่าเซิร์ฟเวอร์รันอยู่ และใช้ WiFi เดียวกัน');
+      showAlert('เชื่อมต่อไม่ได้', 'กรุณาตรวจสอบลิงก์ VS Code ว่าตั้งเป็น Public หรือยัง');
     } finally {
       setAiLoading(false);
     }
@@ -410,6 +417,7 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                       <Text style={{ fontSize: 12, color: '#333', flex: 1, marginLeft: 8 }}>{item.title}</Text>
                     </View>
                   ))}
+              
 
                   <TouchableOpacity style={[o.bigBtn, { backgroundColor: '#2e7d32', marginTop: 14 }]} onPress={handleSubmitAudit}>
                     <Text style={o.bigBtnText}>อนุมัติปล่อยล็อตสินค้า & ออก QR ➔</Text>
