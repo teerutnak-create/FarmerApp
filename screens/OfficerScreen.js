@@ -201,7 +201,7 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
       }
 
       // 2. ส่งข้อมูลไปที่ VS Code (อย่าลืมเปลี่ยนลิงก์ด้านล่าง และต้องมี /predict ต่อท้าย)
-      const res = await fetch('ใhttps://576lb288-5000.asse.devtunnels.ms/predict', {
+      const res = await fetch('https://576lb288-5000.asse.devtunnels.ms/predict', {
         method: 'POST',
         body: formData,
       });
