@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-//import MapView, { Polygon, Marker } from 'react-native-maps';
 import {
   View,
   Text,
@@ -18,6 +17,10 @@ import {
 import { USERS } from '../data/users';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+
+// 🟢 Import หน้าฟอร์มมาให้เจ้าหน้าที่ใช้
+import DailyLogScreen from './DailyLogScreen';
+
 let MapContainer, TileLayer, MarkerWeb, PolygonWeb, useMapEvents;
 if (Platform.OS === 'web') {
   const ReactLeaflet = require('react-leaflet');
@@ -36,22 +39,20 @@ if (Platform.OS !== 'web') {
   Marker = RNMaps.Marker;
 }
 
-
 export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRefresh, onSaveLogForFarmer, onDeleteLog }) {
   const [currentPage, setCurrentPage] = useState('home');
   const [auditTab, setAuditTab] = useState('gap');
   const [selectedFarmer, setSelectedFarmer] = useState(null);
 
-  // States สำหรับ Modal ช่วยเติมข้อมูลให้เกษตรกร
-  const [showAddLogModal, setShowAddLogModal] = useState(false);
-  const [officerNote, setOfficerNote] = useState('');
-  const [officerMoisture, setOfficerMoisture] = useState('');
+  // States สำหรับให้เจ้าหน้าที่กรอกฟอร์มแทน
   const [targetFarmerForAdd, setTargetFarmerForAdd] = useState(null);
-  // States สำหรับ Modal ดูรายละเอียดบันทึก
+
+  // States สำหรับ Modal จัดการและดูรีพอร์ต
+  const [showManageModal, setShowManageModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [selectedLog, setSelectedLog] = useState(null);
 
-  // ฟังก์ชันตัวช่วยสำหรับสร้างบรรทัดในแบบฟอร์มรีพอร์ต (ถ้ามีข้อมูลจะติ๊กถูก ถ้าไม่มีจะกากบาทและขีดฆ่า)
+  // ฟังก์ชันตัวช่วยสำหรับสร้างบรรทัดในแบบฟอร์มรีพอร์ต
   const renderReportRow = (label, value) => {
     const hasValue = value && value !== '';
     return (
@@ -74,27 +75,20 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
   // States สำหรับ GIS & GPS
   const [coords, setCoords] = useState('Lat: 15.118624, Long: 104.322015');
   const [gpsConnected, setGpsConnected] = useState(false);
-  // --- โค้ดส่วนที่เพิ่มใหม่สำหรับแผนที่ GIS ---
-  const [polygonPoints, setPolygonPoints] = useState([]); // เก็บชุดพิกัดที่เจ้าหน้าที่จิ้ม
+  const [polygonPoints, setPolygonPoints] = useState([]);
 
-  // ฟังก์ชันเวลานิ้วจิ้มบนแผนที่
   const handleMapPress = (event) => {
     const { coordinate } = event.nativeEvent;
     setPolygonPoints((currentPoints) => [...currentPoints, coordinate]);
   };
 
-  // ฟังก์ชันล้างพื้นที่เพื่อเริ่มวาดใหม่
-  const clearPolygon = () => {
-    setPolygonPoints([]);
-  };
-  // ------------------------------------
+  const clearPolygon = () => setPolygonPoints([]);
 
   // States สำหรับ AI & Sensor
-  const [aiHistory, setAiHistory] = useState({}); // เก็บประวัติการสแกนทั้งหมด
-  const [aiLoading, setAiLoading] = useState(false); // <--- เพิ่ม: ทำสถานะกำลังโหลด
+  const [aiHistory, setAiHistory] = useState({});
+  const [aiLoading, setAiLoading] = useState(false);
   const [btConnected, setBtConnected] = useState(false);
   const [sensorData, setSensorData] = useState({ moisture: '--', temp: '--', sunlight: '--', rain: '--' });
-  
 
   // GAP Checklist
   const [gapItems, setGapItems] = useState([
@@ -106,35 +100,21 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
   ]);
   const [lotId, setLotId] = useState('');
 
-  // 🟢 ดึงข้อมูลเกษตรกรจาก Props หรือ Fallback ไปยังข้อมูลดั้งเดิมใน USERS
-  const farmersList = (allUsers && allUsers.length > 0 ? allUsers : USERS).filter(
-    (u) => u.role === 'farmer'
-  );
+  const farmersList = (allUsers && allUsers.length > 0 ? allUsers : USERS).filter((u) => u.role === 'farmer');
 
-  // ฟังก์ชันแสดงการแจ้งเตือนรองรับทั้ง Web และ Mobile
   const showAlert = (title, message) => {
-    if (Platform.OS === 'web') {
-      window.alert(`${title}\n${message}`);
-    } else {
-      Alert.alert(title, message);
-    }
+    if (Platform.OS === 'web') window.alert(`${title}\n${message}`);
+    else Alert.alert(title, message);
   };
 
-  // ตรวจสอบความครบถ้วนของข้อมูลเกษตรกร
   const checkFarmerCompleteness = (farmerId) => {
     const farmerLogs = logs ? logs.filter((l) => l.farmerId === farmerId) : [];
-    const hasActivity = farmerLogs.some((l) => l.type === 'บันทึกรายวัน' || l.activity || l.water || l.fertilizer);
+    const hasActivity = farmerLogs.some((l) => l.type === 'บันทึกรายวัน' || l.type === 'บันทึกกิจกรรมประจำวัน' || l.activity || l.water || l.fertilizer);
     const hasMoisture = farmerLogs.some((l) => l.type === 'วัดความชื้น' || l.moisture !== undefined);
     const hasPhoto = farmerLogs.some((l) => l.type === 'ถ่ายรูปแปลง' || l.photoUri);
 
     const isComplete = hasActivity && hasMoisture;
-    return {
-      isComplete,
-      hasActivity,
-      hasMoisture,
-      hasPhoto,
-      count: farmerLogs.length,
-    };
+    return { isComplete, hasActivity, hasMoisture, hasPhoto, count: farmerLogs.length };
   };
 
   const handleSelectFarmer = (farmer) => {
@@ -143,48 +123,17 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
     setAuditTab('gap');
   };
 
+  // 🟢 ฟังก์ชันเปิดฟอร์มสำหรับเจ้าหน้าที่
   const handleOpenAddLog = (farmer) => {
     setTargetFarmerForAdd(farmer);
-    setOfficerNote('');
-    setOfficerMoisture('');
-    setShowAddLogModal(true);
+    setCurrentPage('officer_form');
   };
 
-  // คอมโพเนนต์ช่วยจับพิกัดตอนคลิกแผนที่บนเว็บ
   const MapClickHandler = () => {
     if (Platform.OS === 'web') {
-      useMapEvents({
-        click(e) {
-          handleMapPress({ nativeEvent: { coordinate: { latitude: e.latlng.lat, longitude: e.latlng.lng } } });
-        },
-      });
+      useMapEvents({ click(e) { handleMapPress({ nativeEvent: { coordinate: { latitude: e.latlng.lat, longitude: e.latlng.lng } } }); } });
     }
     return null;
-  };
-
-  const handleSaveOfficerEntry = () => {
-    if (!officerNote.trim() && !officerMoisture.trim()) {
-      showAlert('กรอกข้อมูล', 'กรุณาระบุรายละเอียดหรือค่าความชื้นที่ต้องการเติม');
-      return;
-    }
-
-    if (onSaveLogForFarmer && targetFarmerForAdd) {
-      const summaryText = officerMoisture
-        ? `เจ้าหน้าที่เติมข้อมูล: ${officerNote || 'บันทึกเพิ่มเติม'} (ความชื้น ${officerMoisture}%)`
-        : `เจ้าหน้าที่เติมข้อมูล: ${officerNote}`;
-
-      onSaveLogForFarmer(targetFarmerForAdd.id, targetFarmerForAdd.name, 'เจ้าหน้าที่ลงบันทึกแทน', {
-        summary: summaryText,
-        moisture: officerMoisture ? parseFloat(officerMoisture) : undefined,
-        byOfficer: true,
-      });
-
-      showAlert('เพิ่มข้อมูลสำเร็จ ✅', `บันทึกข้อมูลเพิ่มเติมให้ คุณ${targetFarmerForAdd.name} เรียบร้อยแล้ว`);
-      setShowAddLogModal(false);
-    } else {
-      showAlert('สำเร็จ', 'บันทึกข้อมูลลงระบบเรียบร้อยแล้ว');
-      setShowAddLogModal(false);
-    }
   };
 
   const toggleGap = (id) => {
@@ -198,7 +147,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
 
   const handleConnectBluetooth = () => {
     setBtConnected(true);
-    // เติมค่า sunlight (แสงแดด) และ rain (น้ำฝน) เข้าไป
     setSensorData({ moisture: '68.5', temp: '28.4', sunlight: '45000', rain: '15' });
     showAlert('เชื่อมต่อสำเร็จ 📡', 'BT-SENSOR-09 อ่านค่าเรียบร้อย');
   };
@@ -209,10 +157,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
     showAlert('อนุมัติสำเร็จ ✅', `รหัสล็อตสินค้า: ${generatedLot}`);
   };
 
-  // ฟังก์ชันยิง API ไปหาเซิร์ฟเวอร์ Python AI
-// ฟังก์ชันเปิดอัลบั้มรูป และยิง API ไปหาเซิร์ฟเวอร์ Python AI
-// ฟังก์ชันเปิดอัลบั้มรูป และอัปโหลดด้วย FileSystem
-  // ฟังก์ชันเปิดอัลบั้มรูป และอัปโหลดด้วย FileSystem
   const handleScanAI = async () => {
     let permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permissionResult.granted === false) {
@@ -227,19 +171,13 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
       quality: 0.8,
     });
 
-    if (pickerResult.canceled) {
-      return; 
-    }
+    if (pickerResult.canceled) return; 
 
     const realImageUri = pickerResult.assets[0].uri;
-
     setAiLoading(true);
-    // ลบ setAiScanned และ setAiResult ที่เคยมีตรงนี้ออกไปหมดแล้ว
 
     try {
-      // 1. จัดเตรียมไฟล์รูปภาพให้รองรับทั้ง Web และ Mobile
       const formData = new FormData();
-      
       if (Platform.OS === 'web') {
         const response = await fetch(realImageUri);
         const blob = await response.blob();
@@ -252,7 +190,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
         });
       }
 
-      // 2. ส่งข้อมูลไปที่ VS Code (อย่าลืมเปลี่ยนลิงก์ด้านล่าง และต้องมี /predict ต่อท้าย)
       const res = await fetch('https://576lb288-5000.asse.devtunnels.ms/predict', {
         method: 'POST',
         body: formData,
@@ -261,24 +198,14 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
       const result = await res.json();
       
       if (res.ok) {
-        // ประทับตราวันที่และเวลาปัจจุบัน (แบบไทย)
         const now = new Date();
         const timeString = now.toLocaleString('th-TH');
-
-        const newRecord = {
-          id: Date.now().toString(),
-          image: realImageUri,
-          result: result,
-          timestamp: timeString
-        };
+        const newRecord = { id: Date.now().toString(), image: realImageUri, result: result, timestamp: timeString };
 
         setAiHistory((prevHistory) => {
           const currentFarmerId = selectedFarmer.id;
           const existingHistory = prevHistory[currentFarmerId] || [];
-          return {
-            ...prevHistory,
-            [currentFarmerId]: [newRecord, ...existingHistory]
-          };
+          return { ...prevHistory, [currentFarmerId]: [newRecord, ...existingHistory] };
         });
       } else {
         showAlert('แจ้งเตือนจากเซิร์ฟเวอร์', result.error || 'เกิดข้อผิดพลาดในการวิเคราะห์');
@@ -290,6 +217,24 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
       setAiLoading(false);
     }
   };
+
+  // 🟢 ถ้า State เป็น officer_form ให้เรียกหน้า DailyLogScreen แบบส่ง props พิเศษ
+  if (currentPage === 'officer_form') {
+    return (
+      <DailyLogScreen
+        isOfficer={true}
+        targetFarmer={targetFarmerForAdd}
+        onSave={(type, data) => {
+          if (onSaveLogForFarmer && targetFarmerForAdd) {
+            onSaveLogForFarmer(targetFarmerForAdd.id, targetFarmerForAdd.name, type, data);
+            showAlert('บันทึกสำเร็จ ✅', `บันทึกข้อมูลให้ คุณ${targetFarmerForAdd.name} เรียบร้อยแล้ว`);
+          }
+          setCurrentPage('home');
+        }}
+        onClose={() => setCurrentPage('home')}
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={o.safeArea}>
@@ -307,14 +252,10 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
               <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: 'bold', textDecorationLine: 'underline' }}>ออกจากระบบ</Text>
             </TouchableOpacity>
           </View>
-
           <Text style={o.profileName}>เจ้าหน้าที่สมศรี <Text style={o.profileSub}>(OFF-2026-0089)</Text></Text>
           <Text style={o.profileRole}>ตำแหน่ง: Senior GAP Auditor (Level 2)</Text>
         </View>
 
-        {/* ======================================================== */}
-        {/* หน้าที่ 1: Dashboard ภาพรวม & แผนที่ GPS & คิวเกษตรกร */}
-        {/* ======================================================== */}
         {currentPage === 'home' ? (
           <ScrollView contentContainerStyle={o.container} showsVerticalScrollIndicator={false}>
             
@@ -383,7 +324,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                     <Text style={o.queueName}>คุณ{farmer.name}</Text>
                     <Text style={o.queueDesc}>เบอร์โทรศัพท์: {farmer.login} | อายุ: {farmer.age} ปี (เกิด {farmer.dob})</Text>
 
-                    {/* สรุปสถานะความครบถ้วนของหัวข้อ */}
                     <View style={o.checkStatusGroup}>
                       <Text style={[o.checkBadge, { backgroundColor: check.hasActivity ? '#e8f5e9' : '#fee2e2', color: check.hasActivity ? '#2e7d32' : '#b91c1c' }]}>
                         {check.hasActivity ? '✓ บันทึกกิจกรรม' : '✗ ขาดบันทึกกิจกรรม'}
@@ -402,39 +342,16 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                           </Text>
                         </View>
                         
-                        <View style={{ flexDirection: 'row', gap: 6 }}>
-                          {/* ปุ่มดูรายละเอียดรีพอร์ต (ใหม่) */}
-                          <TouchableOpacity 
-                            style={{ backgroundColor: '#e0f2fe', padding: 8, borderRadius: 8 }}
-                            onPress={() => {
-                              setSelectedLog(lastLog);
-                              setShowReportModal(true);
-                            }}
-                          >
-                            <Text style={{ fontSize: 14 }}>👁️</Text>
-                          </TouchableOpacity>
-
-                          {/* ปุ่มถังขยะสำหรับลบกิจกรรมล่าสุด (เดิม) */}
-                          {onDeleteLog && (
-                            <TouchableOpacity 
-                              style={{ backgroundColor: '#fee2e2', padding: 8, borderRadius: 8 }}
-                              onPress={() => {
-                                if (Platform.OS === 'web') {
-                                  if (window.confirm('คุณต้องการลบบันทึกรายการนี้ใช่หรือไม่?')) {
-                                    onDeleteLog(lastLog.id);
-                                  }
-                                } else {
-                                  Alert.alert('ยืนยันการลบ', 'คุณต้องการลบบันทึกรายการนี้ใช่หรือไม่?', [
-                                    { text: 'ยกเลิก', style: 'cancel' },
-                                    { text: 'ลบทิ้ง', onPress: () => onDeleteLog(lastLog.id), style: 'destructive' }
-                                  ]);
-                                }
-                              }}
-                            >
-                              <Text style={{ fontSize: 14 }}>🗑️</Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
+                        {/* ปุ่มดูรายละเอียดรีพอร์ต */}
+                        <TouchableOpacity 
+                          style={{ backgroundColor: '#e0f2fe', padding: 8, borderRadius: 8 }}
+                          onPress={() => {
+                            setSelectedLog(lastLog);
+                            setShowReportModal(true);
+                          }}
+                        >
+                          <Text style={{ fontSize: 14 }}>👁️</Text>
+                        </TouchableOpacity>
                       </View>
                     )}
 
@@ -443,7 +360,7 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                         style={[o.actionBtn, { flex: 1, backgroundColor: '#0284c7' }]}
                         onPress={() => handleOpenAddLog(farmer)}
                       >
-                        <Text style={o.actionBtnText}>➕ เติมข้อมูลให้เกษตรกร</Text>
+                        <Text style={o.actionBtnText}>✏️ กรอกฟอร์มให้เกษตรกร</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
@@ -458,11 +375,11 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
               })}
             </View>
 
-            {onClear && (
-              <TouchableOpacity onPress={onClear} style={{ marginTop: 10 }}>
-                <Text style={{ color: '#ef4444', textAlign: 'center', fontWeight: 'bold', fontSize: 12 }}>🗑 ล้างข้อมูลบันทึกทั้งหมด</Text>
-              </TouchableOpacity>
-            )}
+            {/* 🟢 ปุ่มศูนย์จัดการข้อมูล (แทนที่ปุ่มลบเดิม) */}
+            <TouchableOpacity onPress={() => setShowManageModal(true)} style={{ marginTop: 10, padding: 12, backgroundColor: '#f8fafc', borderRadius: 8, borderWidth: 1, borderColor: '#cbd5e1', alignItems: 'center' }}>
+              <Text style={{ color: '#334155', fontWeight: 'bold', fontSize: 12 }}>⚙️ ศูนย์จัดการข้อมูลบันทึกทั้งหมด (แก้ไข/ลบ)</Text>
+            </TouchableOpacity>
+
           </ScrollView>
         ) : (
           /* ======================================================== */
@@ -506,7 +423,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                     </View>
                   ))}
               
-
                   <TouchableOpacity style={[o.bigBtn, { backgroundColor: '#2e7d32', marginTop: 14 }]} onPress={handleSubmitAudit}>
                     <Text style={o.bigBtnText}>อนุมัติปล่อยล็อตสินค้า & ออก QR ➔</Text>
                   </TouchableOpacity>
@@ -531,10 +447,8 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                     🗺️ ปักหมุด GIS & GPS Polygon
                   </Text>
                   
-                  {/* กรอบแสดงแผนที่ดาวเทียม (ปิดไว้ชั่วคราวเพื่อรันบนเว็บ) */}
                   <View style={{ height: 400, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#ddd' }}>
                     {Platform.OS === 'web' ? (
-                      /* แผนที่สำหรับเว็บ Vercel (Leaflet) */
                       <div style={{ height: '100%', width: '100%' }}>
                         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
                         <MapContainer center={[15.118624, 104.322015]} zoom={16} style={{ height: '100%', width: '100%' }}>
@@ -544,12 +458,10 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                           />
                           <MapClickHandler />
                           
-                          {/* วาดหมุด */}
                           {polygonPoints.map((point, index) => (
                             <MarkerWeb key={index} position={[point.latitude, point.longitude]} />
                           ))}
 
-                          {/* วาดพื้นที่ */}
                           {polygonPoints.length >= 3 && (
                             <PolygonWeb
                               positions={polygonPoints.map(p => [p.latitude, p.longitude])}
@@ -559,7 +471,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                         </MapContainer>
                       </div>
                     ) : (
-                      /* แผนที่สำหรับแอปมือถือ (react-native-maps ตัวเดิมของคุณ) */
                       <MapView
                         style={{ flex: 1 }}
                         initialRegion={{
@@ -587,7 +498,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                     )}
                   </View>
 
-                  {/* ปุ่มควบคุมด้านล่างแผนที่ */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 15, marginBottom: 20 }}>
                     <TouchableOpacity 
                       onPress={clearPolygon}
@@ -613,7 +523,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                     <Text style={{ fontSize: 36, marginBottom: 6 }}>📷</Text>
                     <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1b5e20' }}>ถ่ายภาพใบหรือลำต้นผักไหม</Text>
                     
-                    {/* เปลี่ยน onPress ให้มาเรียกฟังก์ชัน handleScanAI แทนของเดิม */}
                     <TouchableOpacity 
                       style={[o.bigBtn, { backgroundColor: '#388e3c', marginTop: 12, opacity: aiLoading ? 0.7 : 1 }]} 
                       onPress={handleScanAI}
@@ -623,10 +532,8 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                     </TouchableOpacity>
                   </View>
 
-                  {/* แสดงประวัติการสแกนทั้งหมด โดยดึงมาเฉพาะของเกษตรกรคนปัจจุบัน */}
                   {(aiHistory[selectedFarmer?.id] || []).map((item) => (
                     <View key={item.id} style={[o.aiResultBox, { marginTop: 15 }]}>
-                      {/* แสดงรูปภาพเล็กๆ และเวลา */}
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
                         <Image source={{ uri: item.image }} style={{ width: 60, height: 60, borderRadius: 8, marginRight: 10 }} />
                         <View>
@@ -635,7 +542,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                         </View>
                       </View>
 
-                      {/* ผลการวิเคราะห์ */}
                       <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#2e7d32' }}>
                         ✅ ผลการวิเคราะห์ AI (ความมั่นใจ {item.result.accuracy}):
                       </Text>
@@ -655,7 +561,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                   <Text style={o.sectionTitle}>📡 IoT Soil & Environment Reader</Text>
                   <View style={o.darkBox}>
                     
-                    {/* แถวที่ 1: ความชื้น & อุณหภูมิ */}
                     <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
                       <View style={o.sensorMetric}>
                         <Text style={{ color: '#c8e6c9', fontSize: 11 }}>ความชื้นดิน</Text>
@@ -667,7 +572,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                       </View>
                     </View>
 
-                    {/* แถวที่ 2: แสงแดด & ปริมาณน้ำฝน (เพิ่มใหม่) */}
                     <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
                       <View style={o.sensorMetric}>
                         <Text style={{ color: '#c8e6c9', fontSize: 11 }}>แสงแดด</Text>
@@ -689,50 +593,66 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
           </View>
         )}
 
-        {/* MODAL: เจ้าหน้าที่ช่วยบันทึกข้อมูลเพิ่มเติมให้เกษตรกร */}
-        <Modal visible={showAddLogModal} animationType="fade" transparent>
+        {/* 🟢 MODAL: ศูนย์จัดการข้อมูล (แก้ไข/ลบ เฉพาะรายการ) */}
+        <Modal visible={showManageModal} animationType="slide" transparent>
           <View style={o.modalOverlay}>
-            <View style={o.modalCard}>
-              <Text style={o.modalTitle}>➕ เพิ่มข้อมูลให้ คุณ{targetFarmerForAdd?.name}</Text>
-              <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
-                เจ้าหน้าที่สามารถช่วยเติมบันทึกกิจกรรมหรือค่าความชื้นแทนเกษตรกรได้
-              </Text>
-
-              <Text style={o.inputLabel}>บันทึกรายละเอียดกิจกรรม</Text>
-              <TextInput
-                style={o.customInput}
-                placeholder="เช่น ใส่ปุ๋ยอินทรีย์ 2 กระสอบ"
-                value={officerNote}
-                onChangeText={setOfficerNote}
-              />
-
-              <Text style={o.inputLabel}>ค่าความชื้นที่วัดได้ (%) [ถ้ามี]</Text>
-              <TextInput
-                style={o.customInput}
-                placeholder="เช่น 14.5"
-                keyboardType="numeric"
-                value={officerMoisture}
-                onChangeText={setOfficerMoisture}
-              />
-
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
-                <TouchableOpacity
-                  style={[o.bigBtn, { flex: 1, backgroundColor: '#9ca3af' }]}
-                  onPress={() => setShowAddLogModal(false)}
-                >
-                  <Text style={o.bigBtnText}>ยกเลิก</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[o.bigBtn, { flex: 1, backgroundColor: '#2e7d32' }]}
-                  onPress={handleSaveOfficerEntry}
-                >
-                  <Text style={o.bigBtnText}>บันทึกข้อมูล</Text>
-                </TouchableOpacity>
+            <View style={[o.modalCard, { maxHeight: '80%', padding: 0, overflow: 'hidden' }]}>
+              <View style={{ backgroundColor: '#f1f5f9', padding: 15, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }}>
+                <Text style={[o.modalTitle, { fontSize: 14, color: '#334155' }]}>⚙️ จัดการข้อมูล (เลือกลบหรือแก้ไข)</Text>
               </View>
+              
+              <ScrollView style={{ padding: 10 }}>
+                {logs && logs.length > 0 ? logs.map(log => {
+                  const logOwner = allUsers?.find(u => u.id === log.farmerId) || USERS.find(u => u.id === log.farmerId);
+                  const ownerName = logOwner ? logOwner.name : log.farmerId;
+                  return (
+                    <View key={log.id} style={{ backgroundColor: '#ffffff', padding: 12, marginBottom: 8, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <View style={{ flex: 1, paddingRight: 8 }}>
+                        <Text style={{ fontWeight: 'bold', fontSize: 12, color: '#0f172a' }} numberOfLines={1}>
+                          ID: {log.farmerId} ({ownerName})
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#475569', marginTop: 2 }} numberOfLines={1}>ประเภท: {log.type}</Text>
+                        <Text style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>เวลา: {new Date(log.time).toLocaleString('th-TH')}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: 10 }}>
+                        <TouchableOpacity 
+                          style={{ backgroundColor: '#e0f2fe', padding: 8, borderRadius: 6 }}
+                          onPress={() => showAlert('แจ้งเตือน', 'ระบบดึงข้อมูลย้อนหลังกลับไปหน้าฟอร์มเพื่อแก้ไข กำลังอยู่ในช่วงพัฒนา (เร็วๆ นี้)')}
+                        >
+                          <Text style={{ fontSize: 12 }}>✏️ แก้ไข</Text>
+                        </TouchableOpacity>
+                        {onDeleteLog && (
+                          <TouchableOpacity 
+                            style={{ backgroundColor: '#fee2e2', padding: 8, borderRadius: 6 }}
+                            onPress={() => {
+                              if (Platform.OS === 'web') {
+                                if (window.confirm('คุณต้องการลบบันทึกรายการนี้ใช่หรือไม่?')) onDeleteLog(log.id);
+                              } else {
+                                Alert.alert('ยืนยันการลบ', 'คุณต้องการลบบันทึกรายการนี้ใช่หรือไม่?', [
+                                  { text: 'ยกเลิก', style: 'cancel' },
+                                  { text: 'ลบทิ้ง', onPress: () => onDeleteLog(log.id), style: 'destructive' }
+                                ]);
+                              }
+                            }}
+                          >
+                            <Text style={{ fontSize: 12 }}>🗑️ ลบ</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  );
+                }) : (
+                  <Text style={{ textAlign: 'center', marginVertical: 20, color: '#94a3b8' }}>ยังไม่มีประวัติการบันทึกข้อมูล</Text>
+                )}
+              </ScrollView>
+
+              <TouchableOpacity style={{ backgroundColor: '#0f172a', padding: 15, alignItems: 'center' }} onPress={() => setShowManageModal(false)}>
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>ปิดหน้าต่าง</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
+
         {/* MODAL: ดูรายละเอียดรีพอร์ตบันทึกกิจกรรม */}
         <Modal visible={showReportModal} animationType="fade" transparent>
           <View style={o.modalOverlay}>
@@ -749,7 +669,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                       🕒 เวลาที่บันทึก: {new Date(selectedLog.time).toLocaleString('th-TH')}
                     </Text>
 
-                    {/* แบบฟอร์มแสดงข้อมูลสำหรับ 'บันทึกกิจกรรมประจำวัน' */}
                     {selectedLog.type === 'บันทึกกิจกรรมประจำวัน' ? (
                       <>
                         <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>ข้อมูลกิจกรรม</Text>
@@ -767,6 +686,9 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                         <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>แรงงาน</Text>
                         {renderReportRow('ประเภทแรงงาน', selectedLog.worker)}
                         {renderReportRow('หมายเหตุแรงงาน', selectedLog.workerNote)}
+                        
+                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0284c7', marginTop: 10, backgroundColor: '#e0f2fe', padding: 4 }}>ข้อมูลที่เจ้าหน้าที่แนบเพิ่ม</Text>
+                        {renderReportRow('ความชื้น (อัปเดต)', selectedLog.moisture ? `${selectedLog.moisture} %` : null)}
                       </>
                     ) : selectedLog.type === 'วัดความชื้น' ? (
                       <>
