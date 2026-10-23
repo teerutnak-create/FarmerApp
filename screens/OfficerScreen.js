@@ -47,6 +47,29 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
   const [officerNote, setOfficerNote] = useState('');
   const [officerMoisture, setOfficerMoisture] = useState('');
   const [targetFarmerForAdd, setTargetFarmerForAdd] = useState(null);
+  // States สำหรับ Modal ดูรายละเอียดบันทึก
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [selectedLog, setSelectedLog] = useState(null);
+
+  // ฟังก์ชันตัวช่วยสำหรับสร้างบรรทัดในแบบฟอร์มรีพอร์ต (ถ้ามีข้อมูลจะติ๊กถูก ถ้าไม่มีจะกากบาทและขีดฆ่า)
+  const renderReportRow = (label, value) => {
+    const hasValue = value && value !== '';
+    return (
+      <View style={{ flexDirection: 'row', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }}>
+        <Text style={{ flex: 1, fontSize: 12, color: '#475569', fontWeight: 'bold' }}>{label}</Text>
+        <View style={{ flex: 1.5, flexDirection: 'row', alignItems: 'center' }}>
+          <Text style={{ fontSize: 12, marginRight: 6 }}>{hasValue ? '✅' : '❌'}</Text>
+          <Text style={{ 
+            fontSize: 12, 
+            color: hasValue ? '#1e293b' : '#94a3b8', 
+            textDecorationLine: hasValue ? 'none' : 'line-through' 
+          }}>
+            {hasValue ? value : 'ไม่ได้ระบุข้อมูล'}
+          </Text>
+        </View>
+      </View>
+    );
+  };
 
   // States สำหรับ GIS & GPS
   const [coords, setCoords] = useState('Lat: 15.118624, Long: 104.322015');
@@ -379,26 +402,39 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                           </Text>
                         </View>
                         
-                        {/* ปุ่มถังขยะสำหรับลบกิจกรรมล่าสุด */}
-                        {onDeleteLog && (
+                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                          {/* ปุ่มดูรายละเอียดรีพอร์ต (ใหม่) */}
                           <TouchableOpacity 
-                            style={{ backgroundColor: '#fee2e2', padding: 8, borderRadius: 8, marginLeft: 10 }}
+                            style={{ backgroundColor: '#e0f2fe', padding: 8, borderRadius: 8 }}
                             onPress={() => {
-                              if (Platform.OS === 'web') {
-                                if (window.confirm('คุณต้องการลบบันทึกรายการนี้ใช่หรือไม่?')) {
-                                  onDeleteLog(lastLog.id);
-                                }
-                              } else {
-                                Alert.alert('ยืนยันการลบ', 'คุณต้องการลบบันทึกรายการนี้ใช่หรือไม่?', [
-                                  { text: 'ยกเลิก', style: 'cancel' },
-                                  { text: 'ลบทิ้ง', onPress: () => onDeleteLog(lastLog.id), style: 'destructive' }
-                                ]);
-                              }
+                              setSelectedLog(lastLog);
+                              setShowReportModal(true);
                             }}
                           >
-                            <Text style={{ fontSize: 14 }}>🗑️</Text>
+                            <Text style={{ fontSize: 14 }}>👁️</Text>
                           </TouchableOpacity>
-                        )}
+
+                          {/* ปุ่มถังขยะสำหรับลบกิจกรรมล่าสุด (เดิม) */}
+                          {onDeleteLog && (
+                            <TouchableOpacity 
+                              style={{ backgroundColor: '#fee2e2', padding: 8, borderRadius: 8 }}
+                              onPress={() => {
+                                if (Platform.OS === 'web') {
+                                  if (window.confirm('คุณต้องการลบบันทึกรายการนี้ใช่หรือไม่?')) {
+                                    onDeleteLog(lastLog.id);
+                                  }
+                                } else {
+                                  Alert.alert('ยืนยันการลบ', 'คุณต้องการลบบันทึกรายการนี้ใช่หรือไม่?', [
+                                    { text: 'ยกเลิก', style: 'cancel' },
+                                    { text: 'ลบทิ้ง', onPress: () => onDeleteLog(lastLog.id), style: 'destructive' }
+                                  ]);
+                                }
+                              }}
+                            >
+                              <Text style={{ fontSize: 14 }}>🗑️</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
                       </View>
                     )}
 
@@ -694,6 +730,64 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                   <Text style={o.bigBtnText}>บันทึกข้อมูล</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          </View>
+        </Modal>
+        {/* MODAL: ดูรายละเอียดรีพอร์ตบันทึกกิจกรรม */}
+        <Modal visible={showReportModal} animationType="fade" transparent>
+          <View style={o.modalOverlay}>
+            <View style={[o.modalCard, { maxHeight: '85%' }]}>
+              <Text style={[o.modalTitle, { fontSize: 16 }]}>📄 รายละเอียดบันทึกกิจกรรม</Text>
+              
+              <ScrollView style={{ marginTop: 10, width: '100%' }} showsVerticalScrollIndicator={false}>
+                {selectedLog && (
+                  <View style={{ backgroundColor: '#fafafa', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                    <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0f172a', marginBottom: 6 }}>
+                      📌 ประเภท: {selectedLog.type}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#64748b', marginBottom: 12 }}>
+                      🕒 เวลาที่บันทึก: {new Date(selectedLog.time).toLocaleString('th-TH')}
+                    </Text>
+
+                    {/* แบบฟอร์มแสดงข้อมูลสำหรับ 'บันทึกกิจกรรมประจำวัน' */}
+                    {selectedLog.type === 'บันทึกกิจกรรมประจำวัน' ? (
+                      <>
+                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>ข้อมูลกิจกรรม</Text>
+                        {renderReportRow('วันที่ปฏิบัติงาน', selectedLog.date)}
+                        {renderReportRow('แปลงที่ทำ', selectedLog.plot)}
+                        {renderReportRow('กิจกรรม', selectedLog.activity)}
+                        {renderReportRow('รายละเอียดกิจกรรม', selectedLog.activityNote)}
+
+                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>ปัจจัยที่ใช้ & แหล่งน้ำ</Text>
+                        {renderReportRow('ปุ๋ย/ปัจจัยที่ใช้', selectedLog.input?.type ? `${selectedLog.input.type} (${selectedLog.input.quantity})` : null)}
+                        {renderReportRow('น้ำหมัก/สารทำเอง', selectedLog.selfMade?.formula)}
+                        {renderReportRow('แจ้งขอ ICS', selectedLog.selfMade?.icsRequested ? 'ต้องการ' : 'ไม่ต้องการ')}
+                        {renderReportRow('แหล่งน้ำ', selectedLog.water?.source)}
+                        
+                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>แรงงาน</Text>
+                        {renderReportRow('ประเภทแรงงาน', selectedLog.worker)}
+                        {renderReportRow('หมายเหตุแรงงาน', selectedLog.workerNote)}
+                      </>
+                    ) : selectedLog.type === 'วัดความชื้น' ? (
+                      <>
+                        {renderReportRow('ค่าความชื้นที่วัดได้', selectedLog.moisture ? `${selectedLog.moisture} %` : null)}
+                      </>
+                    ) : (
+                      <>
+                        {renderReportRow('รายละเอียดเพิ่มเติม', selectedLog.summary)}
+                        {renderReportRow('ความชื้น (ถ้ามี)', selectedLog.moisture ? `${selectedLog.moisture} %` : null)}
+                      </>
+                    )}
+                  </View>
+                )}
+              </ScrollView>
+
+              <TouchableOpacity
+                style={[o.bigBtn, { width: '100%', backgroundColor: '#0284c7', marginTop: 15 }]}
+                onPress={() => setShowReportModal(false)}
+              >
+                <Text style={o.bigBtnText}>ปิดหน้าต่าง</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
