@@ -37,7 +37,7 @@ if (Platform.OS !== 'web') {
 }
 
 
-export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRefresh, onSaveLogForFarmer }) {
+export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRefresh, onSaveLogForFarmer, onDeleteLog }) {
   const [currentPage, setCurrentPage] = useState('home');
   const [auditTab, setAuditTab] = useState('gap');
   const [selectedFarmer, setSelectedFarmer] = useState(null);
@@ -371,11 +371,34 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                     </View>
 
                     {lastLog && (
-                      <View style={o.lastLogBox}>
-                        <Text style={o.lastLogTitle}>📝 บันทึกล่าสุด:</Text>
-                        <Text style={o.lastLogText}>
-                          {lastLog.summary ? lastLog.summary : lastLog.type}
-                        </Text>
+                      <View style={[o.lastLogBox, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={o.lastLogTitle}>📝 บันทึกล่าสุด:</Text>
+                          <Text style={o.lastLogText}>
+                            {lastLog.summary ? lastLog.summary : lastLog.type}
+                          </Text>
+                        </View>
+                        
+                        {/* ปุ่มถังขยะสำหรับลบกิจกรรมล่าสุด */}
+                        {onDeleteLog && (
+                          <TouchableOpacity 
+                            style={{ backgroundColor: '#fee2e2', padding: 8, borderRadius: 8, marginLeft: 10 }}
+                            onPress={() => {
+                              if (Platform.OS === 'web') {
+                                if (window.confirm('คุณต้องการลบบันทึกรายการนี้ใช่หรือไม่?')) {
+                                  onDeleteLog(lastLog.id);
+                                }
+                              } else {
+                                Alert.alert('ยืนยันการลบ', 'คุณต้องการลบบันทึกรายการนี้ใช่หรือไม่?', [
+                                  { text: 'ยกเลิก', style: 'cancel' },
+                                  { text: 'ลบทิ้ง', onPress: () => onDeleteLog(lastLog.id), style: 'destructive' }
+                                ]);
+                              }
+                            }}
+                          >
+                            <Text style={{ fontSize: 14 }}>🗑️</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                     )}
 
