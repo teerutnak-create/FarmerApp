@@ -66,6 +66,7 @@ export default function App() {
           onLogout={handleLogout}
           onSaveLogForFarmer={handleSaveLogForFarmer} // โยนปากกาให้เจ้าหน้าที่จดแทน
           onClear={handleClearLogs}
+          onDeleteLog={handleDeleteLog}
         />
       );
     }
