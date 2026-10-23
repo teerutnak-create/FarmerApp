@@ -739,7 +739,7 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                       🕒 เวลาที่บันทึก: {new Date(selectedLog.time).toLocaleString('th-TH')}
                     </Text>
 
-                    {/* แบบฟอร์มแสดงข้อมูลสำหรับ 'บันทึกกิจกรรมประจำวัน' */}
+                    {/* แสดงฟอร์มเต็มเมื่อเป็น บันทึกกิจกรรมประจำวัน หรือ เจ้าหน้าที่ลงบันทึกแทน */}
                     {selectedLog.type === 'บันทึกกิจกรรมประจำวัน' || selectedLog.type === 'เจ้าหน้าที่ลงบันทึกแทน' ? (
                       <>
                         <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>ข้อมูลกิจกรรม</Text>
@@ -758,6 +758,7 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                         {renderReportRow('ประเภทแรงงาน', selectedLog.worker)}
                         {renderReportRow('หมายเหตุแรงงาน', selectedLog.workerNote)}
 
+                        {/* ถ้ามีการกรอกความชื้นมาด้วย จะแสดงช่องนี้เพิ่ม */}
                         {selectedLog.moisture !== undefined && (
                           <>
                             <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0284c7', marginTop: 10, backgroundColor: '#e0f2fe', padding: 4 }}>ข้อมูลความชื้น</Text>
