@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-//import MapView, { Polygon, Marker } from 'react-native-maps';
+import MapView, { Polygon, Marker } from 'react-native-maps';
 import {
   View,
   Text,
@@ -18,6 +18,15 @@ import {
 import { USERS } from '../data/users';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+let MapContainer, TileLayer, MarkerWeb, PolygonWeb, useMapEvents;
+if (Platform.OS === 'web') {
+  const ReactLeaflet = require('react-leaflet');
+  MapContainer = ReactLeaflet.MapContainer;
+  TileLayer = ReactLeaflet.TileLayer;
+  MarkerWeb = ReactLeaflet.Marker;
+  PolygonWeb = ReactLeaflet.Polygon;
+  useMapEvents = ReactLeaflet.useMapEvents;
+}
 
 
 export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRefresh, onSaveLogForFarmer }) {
@@ -108,6 +117,18 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
     setOfficerNote('');
     setOfficerMoisture('');
     setShowAddLogModal(true);
+  };
+
+  // คอมโพเนนต์ช่วยจับพิกัดตอนคลิกแผนที่บนเว็บ
+  const MapClickHandler = () => {
+    if (Platform.OS === 'web') {
+      useMapEvents({
+        click(e) {
+          handleMapPress({ nativeEvent: { coordinate: { latitude: e.latlng.lat, longitude: e.latlng.lng } } });
+        },
+      });
+    }
+    return null;
   };
 
   const handleSaveOfficerEntry = () => {
@@ -444,34 +465,60 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                   </Text>
                   
                   {/* กรอบแสดงแผนที่ดาวเทียม (ปิดไว้ชั่วคราวเพื่อรันบนเว็บ) */}
-                  {/* 
                   <View style={{ height: 400, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#ddd' }}>
-                    <MapView
-                      style={{ flex: 1 }}
-                      initialRegion={{
-                        latitude: 15.118624,
-                        longitude: 104.322015,
-                        latitudeDelta: 0.005,
-                        longitudeDelta: 0.005,
-                      }}
-                      mapType="satellite"
-                      onPress={handleMapPress}
-                    >
-                      {polygonPoints.map((point, index) => (
-                        <Marker key={index} coordinate={point} pinColor="red" />
-                      ))}
+                    {Platform.OS === 'web' ? (
+                      /* แผนที่สำหรับเว็บ Vercel (Leaflet) */
+                      <div style={{ height: '100%', width: '100%' }}>
+                        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                        <MapContainer center={[15.118624, 104.322015]} zoom={16} style={{ height: '100%', width: '100%' }}>
+                          <TileLayer
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                          />
+                          <MapClickHandler />
+                          
+                          {/* วาดหมุด */}
+                          {polygonPoints.map((point, index) => (
+                            <MarkerWeb key={index} position={[point.latitude, point.longitude]} />
+                          ))}
 
-                      {polygonPoints.length >= 3 && (
-                        <Polygon
-                          coordinates={polygonPoints}
-                          fillColor="rgba(46, 125, 50, 0.4)"
-                          strokeColor="#2e7d32"
-                          strokeWidth={3}
-                        />
-                      )}
-                    </MapView>
+                          {/* วาดพื้นที่ */}
+                          {polygonPoints.length >= 3 && (
+                            <PolygonWeb
+                              positions={polygonPoints.map(p => [p.latitude, p.longitude])}
+                              pathOptions={{ fillColor: 'rgba(46, 125, 50, 0.4)', color: '#2e7d32', weight: 3 }}
+                            />
+                          )}
+                        </MapContainer>
+                      </div>
+                    ) : (
+                      /* แผนที่สำหรับแอปมือถือ (react-native-maps ตัวเดิมของคุณ) */
+                      <MapView
+                        style={{ flex: 1 }}
+                        initialRegion={{
+                          latitude: 15.118624,
+                          longitude: 104.322015,
+                          latitudeDelta: 0.005,
+                          longitudeDelta: 0.005,
+                        }}
+                        mapType="satellite"
+                        onPress={handleMapPress}
+                      >
+                        {polygonPoints.map((point, index) => (
+                          <Marker key={index} coordinate={point} pinColor="red" />
+                        ))}
+
+                        {polygonPoints.length >= 3 && (
+                          <Polygon
+                            coordinates={polygonPoints}
+                            fillColor="rgba(46, 125, 50, 0.4)"
+                            strokeColor="#2e7d32"
+                            strokeWidth={3}
+                          />
+                        )}
+                      </MapView>
+                    )}
                   </View>
-                  */}
 
                   {/* ปุ่มควบคุมด้านล่างแผนที่ */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 15, marginBottom: 20 }}>
