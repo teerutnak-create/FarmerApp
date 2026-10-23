@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import MapView, { Polygon, Marker } from 'react-native-maps';
+//import MapView, { Polygon, Marker } from 'react-native-maps';
 import {
   View,
   Text,
@@ -26,6 +26,14 @@ if (Platform.OS === 'web') {
   MarkerWeb = ReactLeaflet.Marker;
   PolygonWeb = ReactLeaflet.Polygon;
   useMapEvents = ReactLeaflet.useMapEvents;
+}
+
+let MapView, Polygon, Marker;
+if (Platform.OS !== 'web') {
+  const RNMaps = require('react-native-maps');
+  MapView = RNMaps.default;
+  Polygon = RNMaps.Polygon;
+  Marker = RNMaps.Marker;
 }
 
 
