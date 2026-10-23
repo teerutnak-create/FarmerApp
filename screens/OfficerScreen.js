@@ -429,13 +429,26 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
               })}
             </View>
 
-            {/* 🟢 ปุ่มศูนย์จัดการข้อมูล */}
-            <TouchableOpacity 
-              onPress={() => setShowManageModal(true)} 
-              style={{ marginTop: 10, padding: 12, backgroundColor: '#f8fafc', borderRadius: 8, borderWidth: 1, borderColor: '#cbd5e1', alignItems: 'center' }}
-            >
-              <Text style={{ color: '#334155', fontWeight: 'bold', fontSize: 12 }}>⚙️ ศูนย์จัดการข้อมูลบันทึกทั้งหมด (แก้ไข/ลบ)</Text>
-            </TouchableOpacity>
+            {/* ปุ่มดูรายละเอียดรีพอร์ต (แบบรวมข้อมูล) */}
+                        <TouchableOpacity 
+                          style={{ backgroundColor: '#e0f2fe', padding: 8, borderRadius: 8 }}
+                          onPress={() => {
+                            // ค้นหากิจกรรมล่าสุด และ ความชื้นล่าสุด แยกกัน
+                            const actLog = farmerLogs.find(l => l.type === 'บันทึกกิจกรรมประจำวัน' || l.type === 'เจ้าหน้าที่ลงบันทึกแทน');
+                            const moistLog = farmerLogs.find(l => l.type === 'วัดความชื้น' || l.moisture !== undefined);
+                            
+                            setSelectedLog({
+                              isCombinedView: true, // แท็กบอกว่าเป็นแบบฟอร์มรวม
+                              farmerName: farmer.name,
+                              time: lastLog ? lastLog.time : new Date().toISOString(),
+                              activityLog: actLog,
+                              moistureLog: moistLog
+                            });
+                            setShowReportModal(true);
+                          }}
+                        >
+                          <Text style={{ fontSize: 14 }}>👁️</Text>
+                        </TouchableOpacity>
             
           </ScrollView>
         ) : (
