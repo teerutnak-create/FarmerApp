@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,8 +13,8 @@ import {
   Modal,
 } from 'react-native';
 
-export default function DailyLogScreen({ onSave, onClose, isOfficer = false, targetFarmer = null }) {
-  // 🟢 ธีมสีสลับตาม Role (เขียว=เกษตรกร, ฟ้า=เจ้าหน้าที่)
+export default function DailyLogScreen({ onSave, onClose, isOfficer = false, targetFarmer = null, initialData = null }) {
+  // 🟢 ธีมสีสลับตาม Role
   const themeBg = isOfficer ? '#f0f9ff' : '#f1f8e9';
   const themePrimary = isOfficer ? '#0284c7' : '#1b5e20';
   const themeSecondary = isOfficer ? '#0ea5e9' : '#16a34a';
@@ -29,10 +29,8 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
   const [month, setMonth] = useState((today.getMonth() + 1).toString());
   const [year, setYear] = useState((today.getFullYear() + 543).toString());
 
-  // State สำหรับควบคุม Modal ตัวเลือก วัน/เดือน/ปี บน Mobile
   const [activePickerModal, setActivePickerModal] = useState(null); 
 
-  // รายชื่อเดือนภาษาไทย
   const monthsList = [
     { id: '1', name: 'มกราคม' }, { id: '2', name: 'กุมภาพันธ์' }, { id: '3', name: 'มีนาคม' },
     { id: '4', name: 'เมษายน' }, { id: '5', name: 'พฤษภาคม' }, { id: '6', name: 'มิถุนายน' },
@@ -71,10 +69,47 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
   const [workerType, setWorkerType] = useState('ทำเองในครัวเรือน');
   const [workerNote, setWorkerNote] = useState('');
 
-  // 🟢 7. ความชื้น (สำหรับเจ้าหน้าที่บันทึกเพื่อปลดล็อกสถานะ ✅)
+  // 7. ความชื้น
   const [moistureValue, setMoistureValue] = useState('');
 
-  // แสดงการแจ้งเตือนรองรับ Web/Mobile
+  useEffect(() => {
+    if (initialData) {
+      if (initialData.date) {
+        const parts = initialData.date.split('/');
+        if (parts.length === 3) {
+          setDay(parseInt(parts[0], 10).toString());
+          setMonth(parseInt(parts[1], 10).toString());
+          setYear(parts[2]);
+        }
+      }
+      if (initialData.plot) setSelectedPlot(initialData.plot);
+      if (initialData.activity) setSelectedActivity(initialData.activity);
+      if (initialData.activityNote) setActivityNote(initialData.activityNote);
+
+      if (initialData.input) {
+        if (initialData.input.type) setInputType(initialData.input.type);
+        if (initialData.input.quantity) setInputQuantity(initialData.input.quantity);
+        if (initialData.input.note) setInputNote(initialData.input.note);
+      }
+
+      if (initialData.selfMade) {
+        if (initialData.selfMade.formula) setSelfMadeFormula(initialData.selfMade.formula);
+        if (initialData.selfMade.icsRequested !== undefined) setRequestIcsApproval(initialData.selfMade.icsRequested);
+        if (initialData.selfMade.note) setSelfMadeNote(initialData.selfMade.note);
+      }
+
+      if (initialData.water) {
+        if (initialData.water.source) setWaterSource(initialData.water.source);
+        if (initialData.water.level) setWaterLevel(initialData.water.level);
+        if (initialData.water.note) setWaterNote(initialData.water.note);
+      }
+
+      if (initialData.worker) setWorkerType(initialData.worker);
+      if (initialData.workerNote) setWorkerNote(initialData.workerNote);
+      if (initialData.moisture !== undefined) setMoistureValue(initialData.moisture.toString());
+    }
+  }, [initialData]);
+
   const showAlert = (title, message, callback) => {
     if (Platform.OS === 'web') {
       window.alert(`${title}\n${message}`);
@@ -84,18 +119,58 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
     }
   };
 
-  // ฟังก์ชันจับเสียงพูดเปลี่ยนเป็นข้อความ
+  // 🎙️ สถานะการฟังเสียง (เก็บชื่อหมวดที่กำลังฟังอยู่)
+  const [listeningSection, setListeningSection] = useState(null);
+  const recognitionRef = React.useRef(null);
+
   const handleSpeechToText = (currentText, setTextFunc, sectionName) => {
-    showAlert(
-      '🎙️ ฟังเสียงพูดระบบอัตโนมัติ',
-      `ระบบกำลังรับเสียงสำหรับหมวด "${sectionName}"...\n(พูดรายละเอียดข้อความที่ต้องการเติมได้เลย)`,
-      () => {
-        const simulatedText = ` [บันทึกจากเสียง: ${sectionName} เพิ่มเติม]`;
-        setTextFunc((prev) => (prev ? prev + simulatedText : `${sectionName} เพิ่มเติม`));
+    if (Platform.OS !== 'web' || typeof window === 'undefined') {
+      showAlert('แจ้งเตือน', 'ฟีเจอร์พูดเพื่อพิมพ์ใช้ได้บนเว็บเท่านั้นในตอนนี้');
+      return;
+    }
+
+    // กดซ้ำขณะกำลังฟัง = หยุดฟัง
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      return;
+    }
+
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      showAlert('ไม่รองรับ', 'เบราว์เซอร์นี้ไม่รองรับการพูดเพื่อพิมพ์ แนะนำให้ใช้ Google Chrome');
+      return;
+    }
+
+    const rec = new SR();
+    rec.lang = 'th-TH';
+    rec.interimResults = false;
+    rec.continuous = false;
+
+    rec.onstart = () => setListeningSection(sectionName);
+    rec.onresult = (e) => {
+      const text = e.results[0][0].transcript;
+      setTextFunc((prev) => (prev ? `${prev} ${text}` : text));
+    };
+    rec.onerror = (e) => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        showAlert('ไม่ได้รับอนุญาตใช้ไมโครโฟน', 'กรุณาอนุญาตการใช้ไมค์ในเบราว์เซอร์แล้วลองใหม่');
       }
-    );
+    };
+    rec.onend = () => {
+      recognitionRef.current = null;
+      setListeningSection(null);
+    };
+
+    recognitionRef.current = rec;
+    try {
+      rec.start();
+    } catch (err) {
+      recognitionRef.current = null;
+      setListeningSection(null);
+    }
   };
 
+  // 🟢 ฟังก์ชันบันทึกข้อมูล พร้อมแสดงป๊อปอัปแจ้งเตือนและเด้งกลับหน้าหลักทันทีเมื่อกด OK
   const handleSave = () => {
     const formattedDate = `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
     const logData = {
@@ -120,15 +195,17 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
       },
       worker: workerType,
       workerNote,
-      // แนบความชื้นไปด้วย
       moisture: moistureValue ? parseFloat(moistureValue) : undefined,
+      category: 'ACTIVITY',
       timestamp: new Date().toISOString(),
     };
 
+    // 1. เซฟข้อมูลลงระบบ
     if (onSave) {
-      onSave('บันทึกกิจกรรมประจำวัน', logData);
+      onSave(initialData ? initialData.type : 'บันทึกกิจกรรมประจำวัน', logData);
     }
 
+    // 2. 🟢 แสดง Pop-up แจ้งเตือน + พอกด OK แล้วจะเรียก onClose() เด้งกลับหน้าหลักทันที!
     showAlert('บันทึกสำเร็จ ✅', `บันทึกข้อมูลวันที่ ${formattedDate} เรียบร้อยแล้ว`, () => {
       if (onClose) onClose();
     });
@@ -151,7 +228,7 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
           </TouchableOpacity>
           <View>
             <Text style={[styles.headerTitle, { color: themePrimary }]}>
-              {isOfficer ? '📝 ฟอร์มเจ้าหน้าที่ (บันทึกแทน)' : '📝 บันทึกกิจกรรมแปลง'}
+              {initialData ? '✏️ แก้ไขบันทึกกิจกรรม' : isOfficer ? '📝 ฟอร์มเจ้าหน้าที่ (บันทึกแทน)' : '📝 บันทึกกิจกรรมแปลง'}
             </Text>
             {isOfficer && targetFarmer && (
               <Text style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
@@ -167,7 +244,6 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
           
           <Text style={styles.label}>วันที่บันทึกกิจกรรม (วัน / เดือน / ปี พ.ศ.):</Text>
           <View style={styles.dateSelectorRow}>
-            {/* เลือกวัน */}
             <View style={styles.selectBoxContainer}>
               <Text style={styles.selectBoxLabel}>วัน</Text>
               {Platform.OS === 'web' ? (
@@ -181,7 +257,6 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
               )}
             </View>
 
-            {/* เลือกเดือน */}
             <View style={[styles.selectBoxContainer, { flex: 2 }]}>
               <Text style={styles.selectBoxLabel}>เดือน</Text>
               {Platform.OS === 'web' ? (
@@ -197,7 +272,6 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
               )}
             </View>
 
-            {/* เลือกปี พ.ศ. */}
             <View style={styles.selectBoxContainer}>
               <Text style={styles.selectBoxLabel}>ปี พ.ศ.</Text>
               {Platform.OS === 'web' ? (
@@ -242,7 +316,6 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
             ))}
           </View>
 
-          {/* กล่องข้อความ + ปุ่มอัดเสียงจับข้อความ */}
           <Text style={[styles.subLabel, { color: themePrimary }]}>รายละเอียดกิจกรรมเพิ่มเติม:</Text>
           <View style={[styles.speechInputContainer, { borderColor: themeBorder }]}>
             <TextInput
@@ -253,7 +326,7 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
               multiline
             />
             <TouchableOpacity style={[styles.micBtn, { backgroundColor: themePrimary }]} onPress={() => handleSpeechToText(activityNote, setActivityNote, 'กิจกรรม')}>
-              <Text style={styles.micBtnText}>🎙️ พูดเพื่อพิมพ์</Text>
+              <Text style={styles.micBtnText}>{listeningSection === 'กิจกรรม' ? '🔴 กำลังฟัง... (กดเพื่อหยุด)' : '🎙️ พูดเพื่อพิมพ์'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -302,7 +375,7 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
               multiline
             />
             <TouchableOpacity style={[styles.micBtn, { backgroundColor: themePrimary }]} onPress={() => handleSpeechToText(inputNote, setInputNote, 'ปัจจัยการผลิต')}>
-              <Text style={styles.micBtnText}>🎙️ พูดเพื่อพิมพ์</Text>
+              <Text style={styles.micBtnText}>{listeningSection === 'ปัจจัยการผลิต' ? '🔴 กำลังฟัง... (กดเพื่อหยุด)' : '🎙️ พูดเพื่อพิมพ์'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -344,7 +417,7 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
               multiline
             />
             <TouchableOpacity style={[styles.micBtn, { backgroundColor: themePrimary }]} onPress={() => handleSpeechToText(selfMadeNote, setSelfMadeNote, 'น้ำหมักสารทำเอง')}>
-              <Text style={styles.micBtnText}>🎙️ พูดเพื่อพิมพ์</Text>
+              <Text style={styles.micBtnText}>{listeningSection === 'น้ำหมักสารทำเอง' ? '🔴 กำลังฟัง... (กดเพื่อหยุด)' : '🎙️ พูดเพื่อพิมพ์'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -393,7 +466,7 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
               multiline
             />
             <TouchableOpacity style={[styles.micBtn, { backgroundColor: themePrimary }]} onPress={() => handleSpeechToText(waterNote, setWaterNote, 'การจัดการน้ำ')}>
-              <Text style={styles.micBtnText}>🎙️ พูดเพื่อพิมพ์</Text>
+              <Text style={styles.micBtnText}>{listeningSection === 'การจัดการน้ำ' ? '🔴 กำลังฟัง... (กดเพื่อหยุด)' : '🎙️ พูดเพื่อพิมพ์'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -425,12 +498,12 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
               multiline
             />
             <TouchableOpacity style={[styles.micBtn, { backgroundColor: themePrimary }]} onPress={() => handleSpeechToText(workerNote, setWorkerNote, 'แรงงานเครื่องจักร')}>
-              <Text style={styles.micBtnText}>🎙️ พูดเพื่อพิมพ์</Text>
+              <Text style={styles.micBtnText}>{listeningSection === 'แรงงานเครื่องจักร' ? '🔴 กำลังฟัง... (กดเพื่อหยุด)' : '🎙️ พูดเพื่อพิมพ์'}</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* 6. ความชื้น (เฉพาะฟอร์มของเจ้าหน้าที่) */}
+        {/* 6. ความชื้น */}
         {isOfficer && (
           <View style={[styles.card, { borderColor: themeBorder, borderWidth: 2 }]}>
             <Text style={[styles.sectionTitle, { color: themePrimary }]}>💧 6. ระบุค่าความชื้น (Option)</Text>
@@ -447,14 +520,16 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
           </View>
         )}
 
-        {/* ปุ่มบันทึกใหญ่ชัดเจน */}
+        {/* ปุ่มบันทึก */}
         <TouchableOpacity style={[styles.saveBtnLarge, { backgroundColor: themeSecondary }]} onPress={handleSave}>
-          <Text style={styles.saveBtnTextLarge}>💾 กดเพื่อบันทึกข้อมูล</Text>
+          <Text style={styles.saveBtnTextLarge}>
+            {initialData ? '💾 บันทึกการแก้ไข' : '💾 กดเพื่อบันทึกข้อมูล'}
+          </Text>
         </TouchableOpacity>
 
       </ScrollView>
 
-      {/* ================= MODAL สำหรับเลือก วัน/เดือน/ปี บน Mobile ================= */}
+      {/* MODAL เลือกวัน/เดือน/ปี */}
       <Modal visible={activePickerModal !== null} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -614,7 +689,6 @@ const styles = StyleSheet.create({
   },
   saveBtnTextLarge: { color: '#ffffff', fontWeight: 'bold', fontSize: 18 },
 
-  // Modal Styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalCard: { width: '85%', backgroundColor: '#ffffff', borderRadius: 16, padding: 16 },
   modalTitle: { fontSize: 16, fontWeight: 'bold', color: '#1b5e20', textAlign: 'center' },

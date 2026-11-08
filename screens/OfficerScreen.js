@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-//import MapView, { Polygon, Marker } from 'react-native-maps';
 import {
   View,
   Text,
@@ -17,9 +16,6 @@ import {
 } from 'react-native';
 import { USERS } from '../data/users';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy';
-
-// 🟢 Import หน้าฟอร์มมาให้เจ้าหน้าที่ใช้
 import DailyLogScreen from './DailyLogScreen';
 
 let MapContainer, TileLayer, MarkerWeb, PolygonWeb, useMapEvents;
@@ -40,64 +36,37 @@ if (Platform.OS !== 'web') {
   Marker = RNMaps.Marker;
 }
 
-
-export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRefresh, onSaveLogForFarmer, onDeleteLog }) {
+export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRefresh, onSaveLogForFarmer, onUpdateLog, onDeleteLog, onDeleteActivityField }) {
   const [currentPage, setCurrentPage] = useState('home');
   const [auditTab, setAuditTab] = useState('gap');
   const [selectedFarmer, setSelectedFarmer] = useState(null);
 
-  // States สำหรับให้เจ้าหน้าที่กรอกฟอร์มแทน
   const [targetFarmerForAdd, setTargetFarmerForAdd] = useState(null);
+  const [editingLogData, setEditingLogData] = useState(null);
 
-  // States สำหรับ Modal ดูรายละเอียดบันทึก และ จัดการข้อมูล
   const [showReportModal, setShowReportModal] = useState(false);
   const [selectedLog, setSelectedLog] = useState(null);
-  const [showManageModal, setShowManageModal] = useState(false); // <--- เพิ่ม Modal จัดการข้อมูล
-
-  // ฟังก์ชันตัวช่วยสำหรับสร้างบรรทัดในแบบฟอร์มรีพอร์ต (ถ้ามีข้อมูลจะติ๊กถูก ถ้าไม่มีจะกากบาทและขีดฆ่า)
-  const renderReportRow = (label, value) => {
-    const hasValue = value && value !== '';
-    return (
-      <View style={{ flexDirection: 'row', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }}>
-        <Text style={{ flex: 1, fontSize: 12, color: '#475569', fontWeight: 'bold' }}>{label}</Text>
-        <View style={{ flex: 1.5, flexDirection: 'row', alignItems: 'center' }}>
-          <Text style={{ fontSize: 12, marginRight: 6 }}>{hasValue ? '✅' : '❌'}</Text>
-          <Text style={{ 
-            fontSize: 12, 
-            color: hasValue ? '#1e293b' : '#94a3b8', 
-            textDecorationLine: hasValue ? 'none' : 'line-through' 
-          }}>
-            {hasValue ? value : 'ไม่ได้ระบุข้อมูล'}
-          </Text>
-        </View>
-      </View>
-    );
-  };
+  const [showManageModal, setShowManageModal] = useState(false);
 
   // States สำหรับ GIS & GPS
   const [coords, setCoords] = useState('Lat: 15.118624, Long: 104.322015');
   const [gpsConnected, setGpsConnected] = useState(false);
-  // --- โค้ดส่วนที่เพิ่มใหม่สำหรับแผนที่ GIS ---
-  const [polygonPoints, setPolygonPoints] = useState([]); // เก็บชุดพิกัดที่เจ้าหน้าที่จิ้ม
+  const [polygonPoints, setPolygonPoints] = useState([]);
 
-  // ฟังก์ชันเวลานิ้วจิ้มบนแผนที่
   const handleMapPress = (event) => {
     const { coordinate } = event.nativeEvent;
     setPolygonPoints((currentPoints) => [...currentPoints, coordinate]);
   };
 
-  // ฟังก์ชันล้างพื้นที่เพื่อเริ่มวาดใหม่
   const clearPolygon = () => {
     setPolygonPoints([]);
   };
-  // ------------------------------------
 
   // States สำหรับ AI & Sensor
-  const [aiHistory, setAiHistory] = useState({}); // เก็บประวัติการสแกนทั้งหมด
-  const [aiLoading, setAiLoading] = useState(false); // <--- เพิ่ม: ทำสถานะกำลังโหลด
+  const [aiHistory, setAiHistory] = useState({});
+  const [aiLoading, setAiLoading] = useState(false);
   const [btConnected, setBtConnected] = useState(false);
   const [sensorData, setSensorData] = useState({ moisture: '--', temp: '--', sunlight: '--', rain: '--' });
-  
 
   // GAP Checklist
   const [gapItems, setGapItems] = useState([
@@ -109,12 +78,112 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
   ]);
   const [lotId, setLotId] = useState('');
 
-  // 🟢 ดึงข้อมูลเกษตรกรจาก Props หรือ Fallback ไปยังข้อมูลดั้งเดิมใน USERS
-  const farmersList = (allUsers && allUsers.length > 0 ? allUsers : USERS).filter(
-    (u) => u.role === 'farmer'
-  );
+  // 🟢 ฟังก์ชันส่งออกรายงานบันทึกกิจกรรมเกษตรกรทุกคนเป็น PDF
+  const handleExportPDF = () => {
+    if (Platform.OS === 'web') {
+      const printWindow = window.open('', '_blank');
+      const farmers = (allUsers && allUsers.length > 0 ? allUsers : USERS).filter(u => u.role === 'farmer');
 
-  // ฟังก์ชันแสดงการแจ้งเตือนรองรับทั้ง Web และ Mobile
+      let htmlContent = `
+        <html>
+          <head>
+            <title>รายงานการบันทึกกิจกรรมเกษตรกร - ต.ผักไหม</title>
+            <style>
+              body { font-family: 'Sarabun', Tahoma, sans-serif; padding: 20px; color: #333; }
+              h1 { color: #1b5e20; text-align: center; margin-bottom: 5px; }
+              p.sub { text-align: center; color: #666; font-size: 14px; margin-top: 0; }
+              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+              th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 13px; }
+              th { background-color: #2e7d32; color: white; }
+              tr:nth-child(even) { background-color: #f9f9f9; }
+              .header-info { margin-bottom: 20px; padding: 10px; background: #e8f5e9; border-radius: 5px; }
+            </style>
+          </head>
+          <body>
+            <h1>🌾 รายงานการบันทึกกิจกรรมประจำวันของเกษตรกร</h1>
+            <p class="sub">กลุ่มวิสาหกิจชุมชน ต.ผักไหม | ข้อมูล ณ วันที่ ${new Date().toLocaleDateString('th-TH')}</p>
+            
+            <div class="header-info">
+              <strong>ผู้ออกรายงาน:</strong> เจ้าหน้าที่สมศรี (OFF-2026-0089)<br/>
+              <strong>จำนวนเกษตรกรทั้งหมด:</strong> ${farmers.length} ราย | <strong>จำนวนบันทึกกิจกรรมรวม:</strong> ${logs ? logs.length : 0} รายการ
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>วันที่/เวลา</th>
+                  <th>รหัส/ชื่อเกษตรกร</th>
+                  <th>ประเภทบันทึก</th>
+                  <th>แปลง</th>
+                  <th>กิจกรรม</th>
+                  <th>ปัจจัยที่ใช้/หมายเหตุ</th>
+                  <th>ความชื้น (%)</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${logs && logs.length > 0 ? logs.map(l => {
+                  const farmer = farmers.find(f => f.id === l.farmerId);
+                  return `
+                    <tr>
+                      <td>${new Date(l.time).toLocaleString('th-TH')}</td>
+                      <td>${l.farmerId} - คุณ${farmer ? farmer.name : 'ไม่ระบุ'}</td>
+                      <td>${l.type || '-'}</td>
+                      <td>${l.plot || '-'}</td>
+                      <td>${l.activity || '-'}</td>
+                      <td>${l.activityNote || l.input?.type || l.summary || '-'}</td>
+                      <td>${l.moisture !== undefined ? l.moisture + '%' : '-'}</td>
+                    </tr>
+                  `;
+                }).join('') : '<tr><td colspan="7" style="text-align:center;">ไม่มีข้อมูลการบันทึก</td></tr>'}
+              </tbody>
+            </table>
+            <script>
+              window.onload = function() { window.print(); }
+            </script>
+          </body>
+        </html>
+      `;
+
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+    } else {
+      Alert.alert('ส่งออก PDF 📄', 'ระบบกำลังจัดทำไฟล์ PDF สำหรับอุปกรณ์เคลื่อนที่...');
+    }
+  };
+
+  const renderReportRow = (label, value, onRemoveField = null) => {
+    const hasValue = value && value !== '';
+    return (
+      <View style={{ flexDirection: 'row', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', alignItems: 'center' }}>
+        <Text style={{ flex: 1, fontSize: 12, color: '#475569', fontWeight: 'bold' }}>{label}</Text>
+        <View style={{ flex: 1.5, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+            <Text style={{ fontSize: 12, marginRight: 6 }}>{hasValue ? '✅' : '❌'}</Text>
+            <Text style={{ 
+              fontSize: 12, 
+              color: hasValue ? '#1e293b' : '#94a3b8', 
+              textDecorationLine: hasValue ? 'none' : 'line-through' 
+            }}>
+              {hasValue ? value : 'ไม่ได้ระบุข้อมูล'}
+            </Text>
+          </View>
+
+          {/* 🟢 ปุ่มเลือกลบเฉพาะกิจกรรมย่อย */}
+          {hasValue && onRemoveField && (
+            <TouchableOpacity 
+              onPress={onRemoveField}
+              style={{ backgroundColor: '#fee2e2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 4 }}
+            >
+              <Text style={{ fontSize: 10, color: '#b91c1c', fontWeight: 'bold' }}>🗑️ ลบกิจกรรมนี้</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  const farmersList = (allUsers && allUsers.length > 0 ? allUsers : USERS).filter((u) => u.role === 'farmer');
+
   const showAlert = (title, message) => {
     if (Platform.OS === 'web') {
       window.alert(`${title}\n${message}`);
@@ -123,12 +192,11 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
     }
   };
 
-  // ตรวจสอบความครบถ้วนของข้อมูลเกษตรกร
   const checkFarmerCompleteness = (farmerId) => {
     const farmerLogs = logs ? logs.filter((l) => l.farmerId === farmerId) : [];
-    // เพิ่มการตรวจสอบประเภท 'บันทึกกิจกรรมประจำวัน' ด้วย
-    const hasActivity = farmerLogs.some((l) => l.type === 'บันทึกรายวัน' || l.type === 'บันทึกกิจกรรมประจำวัน' || l.activity || l.water || l.fertilizer);
-    const hasMoisture = farmerLogs.some((l) => l.type === 'วัดความชื้น' || l.moisture !== undefined);
+    
+    const hasActivity = farmerLogs.some((l) => l.category === 'ACTIVITY' || l.type === 'บันทึกรายวัน' || l.type === 'บันทึกกิจกรรมประจำวัน' || l.activity || l.water || l.fertilizer);
+    const hasMoisture = farmerLogs.some((l) => l.category === 'SENSOR' || l.type === 'วัดความชื้น' || l.moisture !== undefined);
     const hasPhoto = farmerLogs.some((l) => l.type === 'ถ่ายรูปแปลง' || l.photoUri);
 
     const isComplete = hasActivity && hasMoisture;
@@ -147,13 +215,51 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
     setAuditTab('gap');
   };
 
-  // 🟢 เปลี่ยนฟังก์ชันการเปิดฟอร์ม ให้สลับไปหน้า DailyLogScreen แทน Modal เดิม
   const handleOpenAddLog = (farmer) => {
     setTargetFarmerForAdd(farmer);
+    setEditingLogData(null);
     setCurrentPage('officer_form');
   };
 
-  // คอมโพเนนต์ช่วยจับพิกัดตอนคลิกแผนที่บนเว็บ
+  const handleOpenEditLog = (logItem) => {
+    const logOwner = farmersList.find(f => f.id === logItem.farmerId) || { id: logItem.farmerId, name: logItem.farmerId };
+    setTargetFarmerForAdd(logOwner);
+    setEditingLogData(logItem);
+    setShowReportModal(false);
+    setShowManageModal(false);
+    setCurrentPage('officer_form');
+  };
+
+  const confirmDeleteLog = (logId) => {
+    const doDelete = () => {
+      if (onDeleteLog) onDeleteLog(logId);
+      showAlert('ลบสำเร็จ 🗑️', 'ลบรายการบันทึกเรียบร้อยแล้ว');
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('คุณต้องการลบบันทึกรายการนี้ใช่หรือไม่?')) doDelete();
+    } else {
+      Alert.alert('ยืนยันการลบ', 'คุณต้องการลบบันทึกรายการนี้ใช่หรือไม่?', [
+        { text: 'ยกเลิก', style: 'cancel' },
+        { text: 'ลบทิ้ง', onPress: doDelete, style: 'destructive' }
+      ]);
+    }
+  };
+
+  const confirmDeleteActivityField = (logId, fieldKey, fieldName) => {
+    if (Platform.OS === 'web') {
+      if (window.confirm(`คุณต้องการลบกิจกรรม "${fieldName}" หรือไม่?`)) {
+        if (onDeleteActivityField) onDeleteActivityField(logId, fieldKey);
+        setShowReportModal(false);
+      }
+    } else {
+      Alert.alert('ยืนยันการลบกิจกรรม', `คุณต้องการลบกิจกรรม "${fieldName}" หรือไม่?`, [
+        { text: 'ยกเลิก', style: 'cancel' },
+        { text: 'ลบกิจกรรม', onPress: () => { if (onDeleteActivityField) onDeleteActivityField(logId, fieldKey); setShowReportModal(false); }, style: 'destructive' }
+      ]);
+    }
+  };
+
   const MapClickHandler = () => {
     if (Platform.OS === 'web') {
       useMapEvents({
@@ -176,7 +282,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
 
   const handleConnectBluetooth = () => {
     setBtConnected(true);
-    // เติมค่า sunlight (แสงแดด) และ rain (น้ำฝน) เข้าไป
     setSensorData({ moisture: '68.5', temp: '28.4', sunlight: '45000', rain: '15' });
     showAlert('เชื่อมต่อสำเร็จ 📡', 'BT-SENSOR-09 อ่านค่าเรียบร้อย');
   };
@@ -187,7 +292,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
     showAlert('อนุมัติสำเร็จ ✅', `รหัสล็อตสินค้า: ${generatedLot}`);
   };
 
-  // ฟังก์ชันเปิดอัลบั้มรูป และยิง API ไปหาเซิร์ฟเวอร์ Python AI
   const handleScanAI = async () => {
     let permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permissionResult.granted === false) {
@@ -207,13 +311,10 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
     }
 
     const realImageUri = pickerResult.assets[0].uri;
-
     setAiLoading(true);
 
     try {
-      // 1. จัดเตรียมไฟล์รูปภาพให้รองรับทั้ง Web และ Mobile
       const formData = new FormData();
-      
       if (Platform.OS === 'web') {
         const response = await fetch(realImageUri);
         const blob = await response.blob();
@@ -226,7 +327,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
         });
       }
 
-      // 2. ส่งข้อมูลไปที่ VS Code (อย่าลืมเปลี่ยนลิงก์ด้านล่าง และต้องมี /predict ต่อท้าย)
       const res = await fetch('https://576lb288-5000.asse.devtunnels.ms/predict', {
         method: 'POST',
         body: formData,
@@ -235,7 +335,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
       const result = await res.json();
       
       if (res.ok) {
-        // ประทับตราวันที่และเวลาปัจจุบัน (แบบไทย)
         const now = new Date();
         const timeString = now.toLocaleString('th-TH');
 
@@ -265,20 +364,27 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
     }
   };
 
-  // 🟢 ถ้า State เป็น officer_form ให้เรียกหน้า DailyLogScreen แบบส่ง props พิเศษไปให้
   if (currentPage === 'officer_form') {
     return (
       <DailyLogScreen
         isOfficer={true}
         targetFarmer={targetFarmerForAdd}
+        initialData={editingLogData}
         onSave={(type, data) => {
-          if (onSaveLogForFarmer && targetFarmerForAdd) {
+          if (editingLogData && onUpdateLog) {
+            onUpdateLog(editingLogData.id, data);
+            showAlert('อัปเดตสำเร็จ ✏️', `แก้ไขข้อมูลให้ คุณ${targetFarmerForAdd?.name || ''} เรียบร้อยแล้ว`);
+          } else if (onSaveLogForFarmer && targetFarmerForAdd) {
             onSaveLogForFarmer(targetFarmerForAdd.id, targetFarmerForAdd.name, type, data);
-            showAlert('บันทึกสำเร็จ ✅', `บันทึกข้อมูลให้ คุณ${targetFarmerForAdd.name} เรียบร้อยแล้ว สถานะจะถูกอัปเดตอัตโนมัติ`);
+            showAlert('บันทึกสำเร็จ ✅', `บันทึกข้อมูลให้ คุณ${targetFarmerForAdd.name} เรียบร้อยแล้ว`);
           }
+          setEditingLogData(null);
           setCurrentPage('home');
         }}
-        onClose={() => setCurrentPage('home')}
+        onClose={() => {
+          setEditingLogData(null);
+          setCurrentPage('home');
+        }}
       />
     );
   }
@@ -304,19 +410,28 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
           <Text style={o.profileRole}>ตำแหน่ง: Senior GAP Auditor (Level 2)</Text>
         </View>
 
-        {/* ======================================================== */}
-        {/* หน้าที่ 1: Dashboard ภาพรวม & แผนที่ GPS & คิวเกษตรกร */}
-        {/* ======================================================== */}
+        {/* หน้าหลัก */}
         {currentPage === 'home' ? (
           <ScrollView contentContainerStyle={o.container} showsVerticalScrollIndicator={false}>
             
-            {/* Dashboard KPI & แผนที่ GPS Interactive */}
+            {/* Dashboard KPI & ปุ่มส่งออก PDF */}
             <View style={o.sectionCard}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Text style={o.sectionTitle}>📊 Dashboard & แผนที่ GPS พิกัดแปลงตรวจ</Text>
-                <TouchableOpacity onPress={onRefresh} style={o.refreshBtn}>
-                  <Text style={{ color: '#2e7d32', fontSize: 11, fontWeight: 'bold' }}>🔄 ซิงก์ข้อมูล</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {/* 🟢 ปุ่มส่งออกข้อมูล PDF */}
+                  <TouchableOpacity onPress={handleExportPDF} style={[o.refreshBtn, { backgroundColor: '#e0f2fe' }]}>
+                    <Text style={{ color: '#0284c7', fontSize: 11, fontWeight: 'bold' }}>📄 ออก PDF</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity onPress={() => setShowManageModal(true)} style={[o.refreshBtn, { backgroundColor: '#f1f5f9' }]}>
+                    <Text style={{ color: '#334155', fontSize: 11, fontWeight: 'bold' }}>⚙️ จัดการข้อมูล</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity onPress={onRefresh} style={o.refreshBtn}>
+                    <Text style={{ color: '#2e7d32', fontSize: 11, fontWeight: 'bold' }}>🔄 ซิงก์ข้อมูล</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <View style={o.kpiGrid}>
@@ -330,7 +445,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                 </View>
               </View>
 
-              {/* แผนที่จำลองพิกัด GPS แปลงเกษตรกร */}
               <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1b5e20', marginTop: 12, marginBottom: 6 }}>
                 🗺️ พิกัดแปลงเกษตรกรในพื้นที่ ต.ผักไหม:
               </Text>
@@ -351,7 +465,7 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
               </View>
             </View>
 
-            {/* ตรวจเช็กความครบถ้วนของข้อมูลเกษตรกรทุกคน */}
+            {/* รายชื่อเกษตรกร */}
             <View style={o.sectionCard}>
               <View style={o.cardHeader}>
                 <Text style={o.sectionTitle}>👨‍🌾 รายชื่อเกษตรกร & ความครบถ้วนของข้อมูล</Text>
@@ -361,7 +475,9 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
               {farmersList.map((farmer) => {
                 const check = checkFarmerCompleteness(farmer.id);
                 const farmerLogs = logs ? logs.filter((l) => l.farmerId === farmer.id) : [];
-                const lastLog = farmerLogs.length > 0 ? farmerLogs[0] : null;
+                
+                // 🟢 ดึงรายการบันทึกสูงสุด 3 รายการล่าสุด
+                const recentLogs = farmerLogs.slice(0, 3);
 
                 return (
                   <View key={farmer.id} style={o.queueItem}>
@@ -375,7 +491,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                     <Text style={o.queueName}>คุณ{farmer.name}</Text>
                     <Text style={o.queueDesc}>เบอร์โทรศัพท์: {farmer.login} | อายุ: {farmer.age} ปี (เกิด {farmer.dob})</Text>
 
-                    {/* สรุปสถานะความครบถ้วนของหัวข้อ */}
                     <View style={o.checkStatusGroup}>
                       <Text style={[o.checkBadge, { backgroundColor: check.hasActivity ? '#e8f5e9' : '#fee2e2', color: check.hasActivity ? '#2e7d32' : '#b91c1c' }]}>
                         {check.hasActivity ? '✓ บันทึกกิจกรรม' : '✗ ขาดบันทึกกิจกรรม'}
@@ -385,27 +500,35 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                       </Text>
                     </View>
 
-                    {lastLog && (
-                      <View style={[o.lastLogBox, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={o.lastLogTitle}>📝 บันทึกล่าสุด:</Text>
-                          <Text style={o.lastLogText}>
-                            {lastLog.summary || lastLog.activity || lastLog.type}
-                          </Text>
-                        </View>
-                        
-                        <View style={{ flexDirection: 'row', gap: 6 }}>
-                          {/* ปุ่มดูรายละเอียดรีพอร์ต */}
-                          <TouchableOpacity 
-                            style={{ backgroundColor: '#e0f2fe', padding: 8, borderRadius: 8 }}
-                            onPress={() => {
-                              setSelectedLog(lastLog);
-                              setShowReportModal(true);
-                            }}
-                          >
-                            <Text style={{ fontSize: 14 }}>👁️</Text>
-                          </TouchableOpacity>
-                        </View>
+                    {/* 🟢 ส่วนแสดงรายการบันทึกล่าสุด สูงสุด 3 รายการ */}
+                    {recentLogs.length > 0 && (
+                      <View style={{ marginTop: 8, gap: 6 }}>
+                        {recentLogs.map((logItem, index) => (
+                          <View key={logItem.id || index} style={[o.lastLogBox, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+                            <View style={{ flex: 1, paddingRight: 6 }}>
+                              <Text style={o.lastLogTitle}>📝 บันทึกล่าสุด ({index + 1}):</Text>
+                              <Text style={o.lastLogText}>
+                                {logItem.summary || logItem.activity || (logItem.moisture !== undefined ? `วัดความชื้น (${logItem.moisture}%)` : logItem.type)}
+                              </Text>
+                            </View>
+                            
+                            <TouchableOpacity 
+                              style={{ backgroundColor: '#e0f2fe', padding: 8, borderRadius: 8 }}
+                              onPress={() => {
+                                setSelectedLog({
+                                  isCombinedView: false,
+                                  farmerName: farmer.name,
+                                  time: logItem.time,
+                                  ...logItem,
+                                  activityLog: logItem
+                                });
+                                setShowReportModal(true);
+                              }}
+                            >
+                              <Text style={{ fontSize: 14 }}>👁️</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ))}
                       </View>
                     )}
 
@@ -428,33 +551,10 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                 );
               })}
             </View>
-
-            {/* ปุ่มดูรายละเอียดรีพอร์ต (แบบรวมข้อมูล) */}
-                        <TouchableOpacity 
-                          style={{ backgroundColor: '#e0f2fe', padding: 8, borderRadius: 8 }}
-                          onPress={() => {
-                            // ค้นหากิจกรรมล่าสุด และ ความชื้นล่าสุด แยกกัน
-                            const actLog = farmerLogs.find(l => l.type === 'บันทึกกิจกรรมประจำวัน' || l.type === 'เจ้าหน้าที่ลงบันทึกแทน');
-                            const moistLog = farmerLogs.find(l => l.type === 'วัดความชื้น' || l.moisture !== undefined);
-                            
-                            setSelectedLog({
-                              isCombinedView: true, // แท็กบอกว่าเป็นแบบฟอร์มรวม
-                              farmerName: farmer.name,
-                              time: lastLog ? lastLog.time : new Date().toISOString(),
-                              activityLog: actLog,
-                              moistureLog: moistLog
-                            });
-                            setShowReportModal(true);
-                          }}
-                        >
-                          <Text style={{ fontSize: 14 }}>👁️</Text>
-                        </TouchableOpacity>
             
           </ScrollView>
         ) : (
-          /* ======================================================== */
-          /* หน้าที่ 2: หน้าลงตรวจแปลงของเกษตรกรที่เลือก */
-          /* ======================================================== */
+          /* หน้าลงตรวจแปลง */
           <View style={{ flex: 1 }}>
             <View style={o.subHeader}>
               <TouchableOpacity onPress={() => setCurrentPage('home')} style={o.backBtn}>
@@ -492,7 +592,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                       <Text style={{ fontSize: 12, color: '#333', flex: 1, marginLeft: 8 }}>{item.title}</Text>
                     </View>
                   ))}
-              
 
                   <TouchableOpacity style={[o.bigBtn, { backgroundColor: '#2e7d32', marginTop: 14 }]} onPress={handleSubmitAudit}>
                     <Text style={o.bigBtnText}>อนุมัติปล่อยล็อตสินค้า & ออก QR ➔</Text>
@@ -518,10 +617,8 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                     🗺️ ปักหมุด GIS & GPS Polygon
                   </Text>
                   
-                  {/* กรอบแสดงแผนที่ดาวเทียม (ปิดไว้ชั่วคราวเพื่อรันบนเว็บ) */}
                   <View style={{ height: 400, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#ddd' }}>
                     {Platform.OS === 'web' ? (
-                      /* แผนที่สำหรับเว็บ Vercel (Leaflet) */
                       <div style={{ height: '100%', width: '100%' }}>
                         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
                         <MapContainer center={[15.118624, 104.322015]} zoom={16} style={{ height: '100%', width: '100%' }}>
@@ -531,12 +628,10 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                           />
                           <MapClickHandler />
                           
-                          {/* วาดหมุด */}
                           {polygonPoints.map((point, index) => (
                             <MarkerWeb key={index} position={[point.latitude, point.longitude]} />
                           ))}
 
-                          {/* วาดพื้นที่ */}
                           {polygonPoints.length >= 3 && (
                             <PolygonWeb
                               positions={polygonPoints.map(p => [p.latitude, p.longitude])}
@@ -546,7 +641,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                         </MapContainer>
                       </div>
                     ) : (
-                      /* แผนที่สำหรับแอปมือถือ (react-native-maps ตัวเดิมของคุณ) */
                       <MapView
                         style={{ flex: 1 }}
                         initialRegion={{
@@ -574,7 +668,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                     )}
                   </View>
 
-                  {/* ปุ่มควบคุมด้านล่างแผนที่ */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 15, marginBottom: 20 }}>
                     <TouchableOpacity 
                       onPress={clearPolygon}
@@ -600,7 +693,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                     <Text style={{ fontSize: 36, marginBottom: 6 }}>📷</Text>
                     <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1b5e20' }}>ถ่ายภาพใบหรือลำต้นผักไหม</Text>
                     
-                    {/* เปลี่ยน onPress ให้มาเรียกฟังก์ชัน handleScanAI แทนของเดิม */}
                     <TouchableOpacity 
                       style={[o.bigBtn, { backgroundColor: '#388e3c', marginTop: 12, opacity: aiLoading ? 0.7 : 1 }]} 
                       onPress={handleScanAI}
@@ -610,10 +702,8 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                     </TouchableOpacity>
                   </View>
 
-                  {/* แสดงประวัติการสแกนทั้งหมด โดยดึงมาเฉพาะของเกษตรกรคนปัจจุบัน */}
                   {(aiHistory[selectedFarmer?.id] || []).map((item) => (
                     <View key={item.id} style={[o.aiResultBox, { marginTop: 15 }]}>
-                      {/* แสดงรูปภาพเล็กๆ และเวลา */}
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
                         <Image source={{ uri: item.image }} style={{ width: 60, height: 60, borderRadius: 8, marginRight: 10 }} />
                         <View>
@@ -622,7 +712,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                         </View>
                       </View>
 
-                      {/* ผลการวิเคราะห์ */}
                       <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#2e7d32' }}>
                         ✅ ผลการวิเคราะห์ AI (ความมั่นใจ {item.result.accuracy}):
                       </Text>
@@ -641,8 +730,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                 <View style={o.sectionCard}>
                   <Text style={o.sectionTitle}>📡 IoT Soil & Environment Reader</Text>
                   <View style={o.darkBox}>
-                    
-                    {/* แถวที่ 1: ความชื้น & อุณหภูมิ */}
                     <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
                       <View style={o.sensorMetric}>
                         <Text style={{ color: '#c8e6c9', fontSize: 11 }}>ความชื้นดิน</Text>
@@ -654,7 +741,6 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                       </View>
                     </View>
 
-                    {/* แถวที่ 2: แสงแดด & ปริมาณน้ำฝน (เพิ่มใหม่) */}
                     <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
                       <View style={o.sensorMetric}>
                         <Text style={{ color: '#c8e6c9', fontSize: 11 }}>แสงแดด</Text>
@@ -676,51 +762,40 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
           </View>
         )}
 
-        {/* 🟢 MODAL: ศูนย์จัดการข้อมูล (แก้ไข/ลบ เฉพาะรายการ) */}
+        {/* MODAL: ศูนย์จัดการข้อมูล */}
         <Modal visible={showManageModal} animationType="slide" transparent>
           <View style={o.modalOverlay}>
             <View style={[o.modalCard, { maxHeight: '80%', padding: 0, overflow: 'hidden' }]}>
               <View style={{ backgroundColor: '#f1f5f9', padding: 15, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }}>
-                <Text style={[o.modalTitle, { fontSize: 14, color: '#334155' }]}>⚙️ จัดการข้อมูล (เลือกลบหรือแก้ไข)</Text>
+                <Text style={[o.modalTitle, { fontSize: 14, color: '#334155' }]}>⚙️ จัดการข้อมูล (เลือกลบหรือแก้ไขประจำวัน)</Text>
               </View>
               
               <ScrollView style={{ padding: 10 }}>
                 {logs && logs.length > 0 ? logs.map(log => {
-                  const logOwner = allUsers?.find(u => u.id === log.farmerId) || USERS.find(u => u.id === log.farmerId);
+                  const logOwner = farmersList.find(u => u.id === log.farmerId);
                   const ownerName = logOwner ? logOwner.name : log.farmerId;
                   return (
                     <View key={log.id} style={{ backgroundColor: '#ffffff', padding: 12, marginBottom: 8, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                       <View style={{ flex: 1, paddingRight: 8 }}>
                         <Text style={{ fontWeight: 'bold', fontSize: 12, color: '#0f172a' }} numberOfLines={1}>
-                          ID: {log.farmerId} ({ownerName})
+                          คุณ{ownerName} (ID: {log.farmerId})
                         </Text>
-                        <Text style={{ fontSize: 11, color: '#475569', marginTop: 2 }} numberOfLines={1}>ประเภท: {log.type}</Text>
+                        <Text style={{ fontSize: 11, color: '#475569', marginTop: 2 }} numberOfLines={1}>ประเภท: {log.type} {log.activity ? `(${log.activity})` : ''}</Text>
                         <Text style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>เวลา: {new Date(log.time).toLocaleString('th-TH')}</Text>
                       </View>
-                      <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
                         <TouchableOpacity 
-                          style={{ backgroundColor: '#e0f2fe', padding: 8, borderRadius: 6 }}
-                          onPress={() => showAlert('แจ้งเตือน', 'ระบบดึงข้อมูลย้อนหลังกลับไปหน้าฟอร์มเพื่อแก้ไข กำลังอยู่ในช่วงพัฒนา (เร็วๆ นี้)')}
+                          style={{ backgroundColor: '#e0f2fe', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 6 }}
+                          onPress={() => handleOpenEditLog(log)}
                         >
-                          <Text style={{ fontSize: 12 }}>✏️ แก้ไข</Text>
+                          <Text style={{ fontSize: 12, color: '#0284c7', fontWeight: 'bold' }}>✏️ แก้ไข</Text>
                         </TouchableOpacity>
-                        {onDeleteLog && (
-                          <TouchableOpacity 
-                            style={{ backgroundColor: '#fee2e2', padding: 8, borderRadius: 6 }}
-                            onPress={() => {
-                              if (Platform.OS === 'web') {
-                                if (window.confirm('คุณต้องการลบบันทึกรายการนี้ใช่หรือไม่?')) onDeleteLog(log.id);
-                              } else {
-                                Alert.alert('ยืนยันการลบ', 'คุณต้องการลบบันทึกรายการนี้ใช่หรือไม่?', [
-                                  { text: 'ยกเลิก', style: 'cancel' },
-                                  { text: 'ลบทิ้ง', onPress: () => onDeleteLog(log.id), style: 'destructive' }
-                                ]);
-                              }
-                            }}
-                          >
-                            <Text style={{ fontSize: 12 }}>🗑️ ลบ</Text>
-                          </TouchableOpacity>
-                        )}
+                        <TouchableOpacity 
+                          style={{ backgroundColor: '#fee2e2', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 6 }}
+                          onPress={() => confirmDeleteLog(log.id)}
+                        >
+                          <Text style={{ fontSize: 12, color: '#b91c1c', fontWeight: 'bold' }}>🗑️ ลบทั้งหมด</Text>
+                        </TouchableOpacity>
                       </View>
                     </View>
                   );
@@ -736,59 +811,121 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
           </View>
         </Modal>
 
-        {/* MODAL: ดูรายละเอียดรีพอร์ตบันทึกกิจกรรม */}
+        {/* MODAL: ดูรายละเอียดและเลือกลบกิจกรรมย่อย */}
         <Modal visible={showReportModal} animationType="fade" transparent>
           <View style={o.modalOverlay}>
             <View style={[o.modalCard, { maxHeight: '85%' }]}>
-              <Text style={[o.modalTitle, { fontSize: 16 }]}>📄 รายละเอียดบันทึกกิจกรรม</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <Text style={[o.modalTitle, { fontSize: 16 }]}>📄 รายรายละเอียดบันทึกกิจกรรม</Text>
+                
+                {selectedLog?.activityLog && (
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    <TouchableOpacity 
+                      style={{ backgroundColor: '#e0f2fe', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 }}
+                      onPress={() => handleOpenEditLog(selectedLog.activityLog)}
+                    >
+                      <Text style={{ fontSize: 11, color: '#0284c7', fontWeight: 'bold' }}>✏️ แก้ไข</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={{ backgroundColor: '#fee2e2', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 }}
+                      onPress={() => {
+                        setShowReportModal(false);
+                        confirmDeleteLog(selectedLog.activityLog.id);
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, color: '#b91c1c', fontWeight: 'bold' }}>🗑️ ลบทั้งหมด</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
               
-              <ScrollView style={{ marginTop: 10, width: '100%' }} showsVerticalScrollIndicator={false}>
+              <ScrollView style={{ marginTop: 4, width: '100%' }} showsVerticalScrollIndicator={false}>
                 {selectedLog && (
                   <View style={{ backgroundColor: '#fafafa', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#e2e8f0' }}>
-                    <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0f172a', marginBottom: 6 }}>
-                      📌 ประเภท: {selectedLog.type}
-                    </Text>
-                    <Text style={{ fontSize: 11, color: '#64748b', marginBottom: 12 }}>
-                      🕒 เวลาที่บันทึก: {new Date(selectedLog.time).toLocaleString('th-TH')}
-                    </Text>
-
-                    {/* แสดงฟอร์มเต็มเมื่อเป็น บันทึกกิจกรรมประจำวัน หรือ เจ้าหน้าที่ลงบันทึกแทน */}
-                    {selectedLog.type === 'บันทึกกิจกรรมประจำวัน' || selectedLog.type === 'เจ้าหน้าที่ลงบันทึกแทน' ? (
+                    
+                    {selectedLog.isCombinedView ? (
                       <>
-                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>ข้อมูลกิจกรรม</Text>
-                        {renderReportRow('วันที่ปฏิบัติงาน', selectedLog.date)}
-                        {renderReportRow('แปลงที่ทำ', selectedLog.plot)}
-                        {renderReportRow('กิจกรรม', selectedLog.activity)}
-                        {renderReportRow('รายละเอียดกิจกรรม', selectedLog.activityNote)}
+                        <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0f172a', marginBottom: 2 }}>
+                          👤 เกษตรกร: คุณ{selectedLog.farmerName}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#64748b', marginBottom: 12 }}>
+                          🕒 เวลาอัปเดตล่าสุด: {new Date(selectedLog.time).toLocaleString('th-TH')}
+                        </Text>
 
-                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>ปัจจัยที่ใช้ & แหล่งน้ำ</Text>
-                        {renderReportRow('ปุ๋ย/ปัจจัยที่ใช้', selectedLog.input?.type ? `${selectedLog.input.type} (${selectedLog.input.quantity})` : null)}
-                        {renderReportRow('น้ำหมัก/สารทำเอง', selectedLog.selfMade?.formula)}
-                        {renderReportRow('แจ้งขอ ICS', selectedLog.selfMade?.icsRequested ? 'ต้องการ' : 'ไม่ต้องการ')}
-                        {renderReportRow('แหล่งน้ำ', selectedLog.water?.source)}
-                        
-                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>แรงงาน</Text>
-                        {renderReportRow('ประเภทแรงงาน', selectedLog.worker)}
-                        {renderReportRow('หมายเหตุแรงงาน', selectedLog.workerNote)}
-
-                        {/* ถ้ามีการกรอกความชื้นมาด้วย จะแสดงช่องนี้เพิ่ม */}
-                        {selectedLog.moisture !== undefined && (
+                        {selectedLog.activityLog ? (
                           <>
-                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0284c7', marginTop: 10, backgroundColor: '#e0f2fe', padding: 4 }}>ข้อมูลความชื้น</Text>
-                            {renderReportRow('ความชื้นที่ระบุ', `${selectedLog.moisture} %`)}
+                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 6, backgroundColor: '#e8f5e9', padding: 4 }}>ข้อมูลกิจกรรม</Text>
+                            {renderReportRow('วันที่ปฏิบัติงาน', selectedLog.activityLog.date, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'date', 'วันที่ปฏิบัติงาน'))}
+                            {renderReportRow('แปลงที่ทำ', selectedLog.activityLog.plot, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'plot', 'แปลงที่ทำ'))}
+                            {renderReportRow('กิจกรรมหลัก', selectedLog.activityLog.activity, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'activity', 'กิจกรรมหลัก'))}
+                            {renderReportRow('รายละเอียดกิจกรรม', selectedLog.activityLog.activityNote, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'activityNote', 'รายละเอียดกิจกรรม'))}
+
+                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>ปัจจัยที่ใช้ & แหล่งน้ำ</Text>
+                            {renderReportRow('ปุ๋ย/ปัจจัยที่ใช้', selectedLog.activityLog.input?.type ? `${selectedLog.activityLog.input.type} (${selectedLog.activityLog.input.quantity})` : null, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'input', 'ปุ๋ย/ปัจจัยที่ใช้'))}
+                            {renderReportRow('น้ำหมัก/สารทำเอง', selectedLog.activityLog.selfMade?.formula, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'selfMade', 'น้ำหมัก/สารทำเอง'))}
+                            {renderReportRow('แหล่งน้ำ', selectedLog.activityLog.water?.source, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'water', 'แหล่งน้ำ'))}
+                            
+                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>แรงงาน</Text>
+                            {renderReportRow('ประเภทแรงงาน', selectedLog.activityLog.worker, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'worker', 'ประเภทแรงงาน'))}
                           </>
+                        ) : (
+                          <Text style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', marginVertical: 8 }}>ยังไม่มีบันทึกกิจกรรมประจำวัน</Text>
                         )}
-                      </>
-                    ) : selectedLog.type === 'วัดความชื้น' ? (
-                      <>
-                        {renderReportRow('ค่าความชื้นที่วัดได้', selectedLog.moisture ? `${selectedLog.moisture} %` : null)}
+
+                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0284c7', marginTop: 12, backgroundColor: '#e0f2fe', padding: 4 }}>ข้อมูลความชื้น (IoT / Manual)</Text>
+                        {selectedLog.moistureLog ? (
+                          renderReportRow('ค่าความชื้นที่วัดได้', `${selectedLog.moistureLog.moisture} %`, () => confirmDeleteActivityField(selectedLog.moistureLog.id, 'moisture', 'ค่าความชื้น'))
+                        ) : selectedLog.activityLog && selectedLog.activityLog.moisture !== undefined ? (
+                          renderReportRow('ค่าความชื้นที่ระบุ', `${selectedLog.activityLog.moisture} %`, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'moisture', 'ค่าความชื้น'))
+                        ) : (
+                          renderReportRow('ค่าความชื้นที่วัดได้', null)
+                        )}
                       </>
                     ) : (
                       <>
-                        {renderReportRow('รายละเอียดเพิ่มเติม', selectedLog.summary)}
-                        {renderReportRow('ความชื้น (ถ้ามี)', selectedLog.moisture ? `${selectedLog.moisture} %` : null)}
+                        <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0f172a', marginBottom: 6 }}>
+                          📌 ประเภท: {selectedLog.type}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#64748b', marginBottom: 12 }}>
+                          🕒 เวลาที่บันทึก: {new Date(selectedLog.time).toLocaleString('th-TH')}
+                        </Text>
+
+                        {selectedLog.type === 'บันทึกกิจกรรมประจำวัน' || selectedLog.type === 'เจ้าหน้าที่ลงบันทึกแทน' ? (
+                          <>
+                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>ข้อมูลกิจกรรม</Text>
+                            {renderReportRow('วันที่ปฏิบัติงาน', selectedLog.date, () => confirmDeleteActivityField(selectedLog.id, 'date', 'วันที่ปฏิบัติงาน'))}
+                            {renderReportRow('แปลงที่ทำ', selectedLog.plot, () => confirmDeleteActivityField(selectedLog.id, 'plot', 'แปลงที่ทำ'))}
+                            {renderReportRow('กิจกรรมหลัก', selectedLog.activity, () => confirmDeleteActivityField(selectedLog.id, 'activity', 'กิจกรรมหลัก'))}
+                            {renderReportRow('รายละเอียดกิจกรรม', selectedLog.activityNote, () => confirmDeleteActivityField(selectedLog.id, 'activityNote', 'รายละเอียดกิจกรรม'))}
+
+                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>ปัจจัยที่ใช้ & แหล่งน้ำ</Text>
+                            {renderReportRow('ปุ๋ย/ปัจจัยที่ใช้', selectedLog.input?.type ? `${selectedLog.input.type} (${selectedLog.input.quantity})` : null, () => confirmDeleteActivityField(selectedLog.id, 'input', 'ปุ๋ย/ปัจจัยที่ใช้'))}
+                            {renderReportRow('น้ำหมัก/สารทำเอง', selectedLog.selfMade?.formula, () => confirmDeleteActivityField(selectedLog.id, 'selfMade', 'น้ำหมัก/สารทำเอง'))}
+                            {renderReportRow('แหล่งน้ำ', selectedLog.water?.source, () => confirmDeleteActivityField(selectedLog.id, 'water', 'แหล่งน้ำ'))}
+                            
+                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>แรงงาน</Text>
+                            {renderReportRow('ประเภทแรงงาน', selectedLog.worker, () => confirmDeleteActivityField(selectedLog.id, 'worker', 'ประเภทแรงงาน'))}
+
+                            {selectedLog.moisture !== undefined && (
+                              <>
+                                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0284c7', marginTop: 10, backgroundColor: '#e0f2fe', padding: 4 }}>ข้อมูลความชื้น</Text>
+                                {renderReportRow('ความชื้นที่ระบุ', `${selectedLog.moisture} %`, () => confirmDeleteActivityField(selectedLog.id, 'moisture', 'ความชื้น'))}
+                              </>
+                            )}
+                          </>
+                        ) : selectedLog.type === 'วัดความชื้น' ? (
+                          <>
+                            {renderReportRow('ค่าความชื้นที่วัดได้', selectedLog.moisture ? `${selectedLog.moisture} %` : null, () => confirmDeleteActivityField(selectedLog.id, 'moisture', 'ค่าความชื้น'))}
+                          </>
+                        ) : (
+                          <>
+                            {renderReportRow('รายละเอียดเพิ่มเติม', selectedLog.summary, () => confirmDeleteActivityField(selectedLog.id, 'summary', 'รายละเอียด'))}
+                            {renderReportRow('ความชื้น (ถ้ามี)', selectedLog.moisture ? `${selectedLog.moisture} %` : null, () => confirmDeleteActivityField(selectedLog.id, 'moisture', 'ความชื้น'))}
+                          </>
+                        )}
                       </>
                     )}
+
                   </View>
                 )}
               </ScrollView>
@@ -860,7 +997,7 @@ const o = StyleSheet.create({
   checkStatusGroup: { flexDirection: 'row', gap: 6, marginTop: 6 },
   checkBadge: { fontSize: 10, fontWeight: 'bold', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
 
-  lastLogBox: { backgroundColor: '#f1f8e9', padding: 8, borderRadius: 6, marginTop: 6 },
+  lastLogBox: { backgroundColor: '#f1f8e9', padding: 8, borderRadius: 6, marginTop: 2 },
   lastLogTitle: { fontSize: 10, fontWeight: 'bold', color: '#2e7d32' },
   lastLogText: { fontSize: 11, color: '#333', marginTop: 2 },
 

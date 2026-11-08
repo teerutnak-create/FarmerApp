@@ -10,6 +10,7 @@ import {
   StatusBar,
   StyleSheet,
   Modal,
+  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchLiveMoisture } from '../utils/notify';
@@ -132,7 +133,16 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
     if (onLogout) onLogout();
   };
 
-  if (page === 'form') return <DailyLogScreen onSave={onLog} onClose={back} />;
+  // 🟢 ฟังก์ชันส่งไปยัง DailyLogScreen แบบเปิดเต็มหน้าจอ
+  if (page === 'form') return (
+    <DailyLogScreen 
+      onSave={(type, data) => {
+        if (onLog) onLog(type, data);
+      }} 
+      onClose={back} 
+    />
+  );
+
   if (page === 'photo') return <PhotoScreen onSave={onLog} onClose={back} />;
   if (page === 'plot') return <PlotInfoScreen onSave={onLog} onClose={back} />;
   if (page === 'yield') return <YieldScreen user={user} onSave={onLog} onClose={back} />;
@@ -145,7 +155,7 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
   const saveMoisture = () => {
     const v = parseFloat(moisture);
     if (isNaN(v)) return;
-    onLog('วัดความชื้น', { moisture: v });
+    onLog('วัดความชื้น', { moisture: v, category: 'SENSOR' });
     setMoisture('');
     Alert.alert('บันทึกแล้ว ✅', 'ความชื้น ' + v + '%');
   };
