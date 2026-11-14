@@ -19,6 +19,7 @@ import DailyLogScreen from './DailyLogScreen';
 import PhotoScreen from './PhotoScreen';
 import PlotInfoScreen from './PlotInfoScreen';
 import YieldScreen from './YieldScreen';
+import AssistantScreen from './AssistantScreen'; // ➕ เพิ่มใหม่ (จุดที่ 1)
 import { USERS as DEFAULT_USERS } from '../data/users';
 
 const HARVEST = 'เกี่ยวข้าวเสร็จแล้ว';
@@ -147,6 +148,10 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
   if (page === 'plot') return <PlotInfoScreen onSave={onLog} onClose={back} />;
   if (page === 'yield') return <YieldScreen user={user} onSave={onLog} onClose={back} />;
 
+  // ➕ เพิ่มใหม่ (จุดที่ 2): หน้าผู้ช่วย AI
+  if (page === 'assistant')
+    return <AssistantScreen user={user} logs={logs} moisture={moisture} onClose={back} />;
+
   const handleSelectVideo = (video) => {
     setActiveVideo(video);
     setIsPlaying(true);
@@ -261,6 +266,12 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
               >
                 <Text style={f.sidebarTabIcon}>👥</Text>
                 <Text style={[f.sidebarTabText, recordMode === 'community' && f.sidebarTabTextActive]}>แดชบอร์ดกลุ่ม</Text>
+              </TouchableOpacity>
+
+              {/* ➕ เพิ่มใหม่ (จุดที่ 3): ปุ่มผู้ช่วย AI */}
+              <TouchableOpacity style={f.sidebarTab} onPress={() => setPage('assistant')}>
+                <Text style={f.sidebarTabIcon}>🤖</Text>
+                <Text style={f.sidebarTabText}>ผู้ช่วย AI</Text>
               </TouchableOpacity>
             </View>
 
