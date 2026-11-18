@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { notify } from '../utils/notify';
 import { PLOTS } from '../data/options';
 import {
   SOILS,
@@ -49,20 +50,7 @@ export default function PlotInfoScreen({ onSave, onClose }) {
 
     onSave('ข้อมูลแปลง', extra);
 
-    // ป็อบอัพแจ้งเตือนสำเร็จ กด ตกลง แล้วปิดหน้านี้
-    Alert.alert(
-      'บันทึกสำเร็จ! ✅',
-      extra.summary,
-      [
-        {
-          text: 'ตกลง',
-          onPress: () => {
-            if (onClose) onClose();
-          },
-        },
-      ],
-      { cancelable: false }
-    );
+    notify('บันทึกสำเร็จ! ✅', extra.summary, onClose);
   };
 
   return (

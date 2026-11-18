@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   ActivityIndicator,
+  Alert,
   Platform,
   SafeAreaView,
   KeyboardAvoidingView,
@@ -23,13 +24,48 @@ export default function AssistantScreen(props) {
   const [prompt, setPrompt] = useState('');
   const [messages, setMessages] = useState([WELCOME_MESSAGE]);
   const [loading, setLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const scrollViewRef = useRef(null);
+  const speechRecognitionRef = useRef(null);
+  const nativeVoiceRef = useRef(null);
+  const voiceBasePromptRef = useRef('');
+
+  const setVoiceTranscript = (transcript) => {
+    const text = transcript.trim();
+    if (!text) return;
+    const basePrompt = voiceBasePromptRef.current;
+    setPrompt(basePrompt ? `${basePrompt} ${text}` : text);
+  };
 
   useEffect(() => {
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 100);
   }, [messages, loading]);
+
+  useEffect(() => {
+    return () => {
+      if (speechRecognitionRef.current) {
+        const recognition = speechRecognitionRef.current;
+        recognition.onresult = null;
+        recognition.onerror = null;
+        recognition.onend = null;
+        try {
+          recognition.abort();
+        } catch (error) {
+          console.warn('Stop browser speech recognition failed:', error);
+        }
+        speechRecognitionRef.current = null;
+      }
+
+      if (nativeVoiceRef.current) {
+        nativeVoiceRef.current
+          .destroy()
+          .catch((error) => console.warn('Stop native speech recognition failed:', error));
+        nativeVoiceRef.current = null;
+      }
+    };
+  }, []);
 
   const handleBack = () => {
     if (typeof props.onBack === 'function') return props.onBack();
@@ -51,6 +87,105 @@ export default function AssistantScreen(props) {
   const handleClearChat = () => {
     if (loading) return;
     setMessages([WELCOME_MESSAGE]);
+  };
+
+  const handleVoiceInput = async () => {
+    if (isListening) {
+      try {
+        if (Platform.OS === 'web' && speechRecognitionRef.current) {
+          speechRecognitionRef.current.stop();
+        } else if (nativeVoiceRef.current) {
+          await nativeVoiceRef.current.stop();
+        }
+      } catch (error) {
+        setIsListening(false);
+        Alert.alert('หยุดฟังเสียงไม่ได้', error.message || 'กรุณาลองอีกครั้ง');
+      }
+      return;
+    }
+
+    voiceBasePromptRef.current = prompt.trimEnd();
+    setIsListening(true);
+
+    if (Platform.OS === 'web') {
+      const SpeechRecognition =
+        typeof window !== 'undefined' &&
+        (window.SpeechRecognition || window.webkitSpeechRecognition);
+
+      if (!SpeechRecognition) {
+        setIsListening(false);
+        Alert.alert('ไม่รองรับ', 'เบราว์เซอร์นี้ไม่รองรับการรู้จำเสียง แนะนำให้ใช้ Google Chrome');
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'th-TH';
+      recognition.interimResults = true;
+      recognition.continuous = false;
+      recognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = 0; i < event.results.length; i += 1) {
+          transcript += `${event.results[i][0].transcript} `;
+        }
+        setVoiceTranscript(transcript);
+      };
+      recognition.onerror = (event) => {
+        setIsListening(false);
+        if (event.error !== 'aborted') {
+          const message =
+            event.error === 'not-allowed' || event.error === 'service-not-allowed'
+              ? 'กรุณาอนุญาตให้เบราว์เซอร์ใช้ไมโครโฟน แล้วลองอีกครั้ง'
+              : event.error === 'no-speech'
+                ? 'ไม่ได้ยินเสียงพูด กรุณาลองพูดอีกครั้ง'
+                : `กรุณาลองอีกครั้ง (${event.error})`;
+          Alert.alert('จับเสียงไม่สำเร็จ', message);
+        }
+      };
+      recognition.onend = () => {
+        speechRecognitionRef.current = null;
+        setIsListening(false);
+      };
+      speechRecognitionRef.current = recognition;
+
+      try {
+        recognition.start();
+      } catch (error) {
+        speechRecognitionRef.current = null;
+        setIsListening(false);
+        Alert.alert('เริ่มใช้ไมโครโฟนไม่ได้', error.message || 'กรุณาลองอีกครั้ง');
+      }
+      return;
+    }
+
+    try {
+      const Voice = require('@react-native-voice/voice').default;
+      nativeVoiceRef.current = Voice;
+      Voice.onSpeechResults = (event) => setVoiceTranscript(event.value?.[0] || '');
+      Voice.onSpeechPartialResults = (event) => setVoiceTranscript(event.value?.[0] || '');
+      Voice.onSpeechEnd = () => setIsListening(false);
+      Voice.onSpeechError = (event) => {
+        setIsListening(false);
+        Alert.alert(
+          'จับเสียงไม่สำเร็จ',
+          event.error || 'กรุณาตรวจสอบสิทธิ์ไมโครโฟนและลองพูดอีกครั้ง'
+        );
+      };
+
+      const available = await Voice.isAvailable();
+      if (!available) {
+        setIsListening(false);
+        Alert.alert('ไม่พบระบบรู้จำเสียง', 'กรุณาตรวจสอบว่ามีบริการรู้จำเสียงในอุปกรณ์');
+        return;
+      }
+
+      await Voice.start('th-TH');
+    } catch (error) {
+      setIsListening(false);
+      Alert.alert(
+        'เริ่มใช้ไมโครโฟนไม่ได้',
+        error.message || 'กรุณาเปิดแอปด้วย Development Build และอนุญาตใช้ไมโครโฟน'
+      );
+    }
   };
 
   const askAI = async () => {
@@ -193,14 +328,26 @@ export default function AssistantScreen(props) {
         <View style={styles.inputBar}>
           <TextInput
             style={styles.input}
-            placeholder="พิมพ์คำถามแล้วกด Enter..."
+            placeholder="พิมพ์คำถามหรือกดไมโครโฟน..."
             placeholderTextColor="#888"
             value={prompt}
-            onChangeText={setPrompt}
+            onChangeText={(text) => {
+              setPrompt(text);
+              if (isListening) voiceBasePromptRef.current = text.trimEnd();
+            }}
             onKeyPress={handleKeyPress}
             blurOnSubmit={false}
             multiline
           />
+          <TouchableOpacity
+            style={[styles.micButton, isListening && styles.micButtonActive]}
+            onPress={handleVoiceInput}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={isListening ? 'หยุดฟังเสียง' : 'เริ่มพูดคำถาม'}
+          >
+            <Text style={styles.micButtonText}>{isListening ? '⏹️' : '🎙️'}</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[
               styles.sendButton,
@@ -358,6 +505,23 @@ const styles = StyleSheet.create({
     borderColor: '#c8d6c8',
     fontSize: 16,
     color: '#222',
+  },
+  micButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#e8f5e9',
+    borderWidth: 1,
+    borderColor: '#c8d6c8',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  micButtonActive: {
+    backgroundColor: '#ffebee',
+    borderColor: '#ef9a9a',
+  },
+  micButtonText: {
+    fontSize: 18,
   },
   sendButton: {
     backgroundColor: '#2e7d32',

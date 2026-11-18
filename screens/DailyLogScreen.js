@@ -54,20 +54,26 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
   const [inputType, setInputType] = useState('ปุ๋ยหมัก');
   const [inputQuantity, setInputQuantity] = useState('1 ถุง/กระสอบ');
   const [inputNote, setInputNote] = useState('');
+  const [inputNotDone, setInputNotDone] = useState(false);
 
   // 4. น้ำหมัก/สารทำเอง & ขออนุมัติ
   const [selfMadeFormula, setSelfMadeFormula] = useState('น้ำหมักชีวภาพ');
   const [requestIcsApproval, setRequestIcsApproval] = useState(true);
   const [selfMadeNote, setSelfMadeNote] = useState('');
+  const [selfMadeNotDone, setSelfMadeNotDone] = useState(false);
 
   // 5. การจัดการน้ำ
   const [waterSource, setWaterSource] = useState('บ่อน้ำประจำแปลง');
   const [waterLevel, setWaterLevel] = useState('ปกติ');
   const [waterNote, setWaterNote] = useState('');
+  const [waterNotDone, setWaterNotDone] = useState(false);
 
   // 6. แรงงาน
   const [workerType, setWorkerType] = useState('ทำเองในครัวเรือน');
   const [workerNote, setWorkerNote] = useState('');
+  const [workerNotDone, setWorkerNotDone] = useState(false);
+
+  const [additionalActivity, setAdditionalActivity] = useState('');
 
   // 7. ความชื้น
   const [moistureValue, setMoistureValue] = useState('');
@@ -90,22 +96,27 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
         if (initialData.input.type) setInputType(initialData.input.type);
         if (initialData.input.quantity) setInputQuantity(initialData.input.quantity);
         if (initialData.input.note) setInputNote(initialData.input.note);
+        if (initialData.input.notDone !== undefined) setInputNotDone(initialData.input.notDone);
       }
 
       if (initialData.selfMade) {
         if (initialData.selfMade.formula) setSelfMadeFormula(initialData.selfMade.formula);
         if (initialData.selfMade.icsRequested !== undefined) setRequestIcsApproval(initialData.selfMade.icsRequested);
         if (initialData.selfMade.note) setSelfMadeNote(initialData.selfMade.note);
+        if (initialData.selfMade.notDone !== undefined) setSelfMadeNotDone(initialData.selfMade.notDone);
       }
 
       if (initialData.water) {
         if (initialData.water.source) setWaterSource(initialData.water.source);
         if (initialData.water.level) setWaterLevel(initialData.water.level);
         if (initialData.water.note) setWaterNote(initialData.water.note);
+        if (initialData.water.notDone !== undefined) setWaterNotDone(initialData.water.notDone);
       }
 
       if (initialData.worker) setWorkerType(initialData.worker);
       if (initialData.workerNote) setWorkerNote(initialData.workerNote);
+      if (initialData.workerNotDone !== undefined) setWorkerNotDone(initialData.workerNotDone);
+      if (initialData.additionalActivity) setAdditionalActivity(initialData.additionalActivity);
       if (initialData.moisture !== undefined) setMoistureValue(initialData.moisture.toString());
     }
   }, [initialData]);
@@ -182,19 +193,24 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
         type: inputType,
         quantity: inputQuantity,
         note: inputNote,
+        notDone: inputNotDone,
       },
       selfMade: {
         formula: selfMadeFormula,
         icsRequested: requestIcsApproval,
         note: selfMadeNote,
+        notDone: selfMadeNotDone,
       },
       water: {
         source: waterSource,
         level: waterLevel,
         note: waterNote,
+        notDone: waterNotDone,
       },
       worker: workerType,
       workerNote,
+      workerNotDone,
+      additionalActivity,
       moisture: moistureValue ? parseFloat(moistureValue) : undefined,
       category: 'ACTIVITY',
       timestamp: new Date().toISOString(),
@@ -334,7 +350,20 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
         {/* 2. ปัจจัยการผลิตที่ใช้ */}
         <View style={styles.card}>
           <Text style={[styles.sectionTitle, { color: themePrimary }]}>📦 2. ปุ๋ยและปัจจัยที่ใช้</Text>
+          <TouchableOpacity
+            style={[
+              styles.bigChip,
+              inputNotDone && { backgroundColor: '#fff7ed', borderColor: '#f97316' },
+            ]}
+            onPress={() => setInputNotDone((notDone) => !notDone)}
+          >
+            <Text style={[styles.bigChipText, inputNotDone && { color: '#c2410c', fontWeight: 'bold' }]}>
+              {inputNotDone ? '✓ วันนี้ไม่ได้ทำกิจกรรมนี้' : 'วันนี้ไม่ได้ทำกิจกรรมนี้'}
+            </Text>
+          </TouchableOpacity>
 
+          {!inputNotDone && (
+            <>
           <Text style={styles.label}>ชนิดที่ใช้:</Text>
           <View style={styles.chipGroup}>
             {['ปุ๋ยหมัก', 'แหนแดง', 'น้ำหมักชีวภาพ', 'ปุ๋ยคอก', 'เมล็ดพันธุ์'].map((t) => (
@@ -378,11 +407,26 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
               <Text style={styles.micBtnText}>{listeningSection === 'ปัจจัยการผลิต' ? '🔴 กำลังฟัง... (กดเพื่อหยุด)' : '🎙️ พูดเพื่อพิมพ์'}</Text>
             </TouchableOpacity>
           </View>
+            </>
+          )}
         </View>
 
         {/* 3. น้ำหมัก/สารทำเอง & สิทธิ์การขออนุญาต */}
         <View style={styles.card}>
           <Text style={[styles.sectionTitle, { color: themePrimary }]}>🧪 3. น้ำหมัก / สารทำเอง</Text>
+          <TouchableOpacity
+            style={[
+              styles.bigChip,
+              selfMadeNotDone && { backgroundColor: '#fff7ed', borderColor: '#f97316' },
+            ]}
+            onPress={() => setSelfMadeNotDone((notDone) => !notDone)}
+          >
+            <Text style={[styles.bigChipText, selfMadeNotDone && { color: '#c2410c', fontWeight: 'bold' }]}>
+              {selfMadeNotDone ? '✓ วันนี้ไม่ได้ทำกิจกรรมนี้' : 'วันนี้ไม่ได้ทำกิจกรรมนี้'}
+            </Text>
+          </TouchableOpacity>
+          {!selfMadeNotDone && (
+            <>
           <Text style={styles.label}>สูตรน้ำหมักที่ใช้:</Text>
           <View style={styles.chipGroup}>
             {['น้ำหมักชีวภาพ', 'น้ำหมักมูลสุกร', 'น้ำหมักเปลือกสับปะรด', 'ฮอร์โมนไข่'].map((f) => (
@@ -420,12 +464,27 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
               <Text style={styles.micBtnText}>{listeningSection === 'น้ำหมักสารทำเอง' ? '🔴 กำลังฟัง... (กดเพื่อหยุด)' : '🎙️ พูดเพื่อพิมพ์'}</Text>
             </TouchableOpacity>
           </View>
+            </>
+          )}
         </View>
 
         {/* 4. แหล่งน้ำ */}
         <View style={styles.card}>
           <Text style={[styles.sectionTitle, { color: themePrimary }]}>💧 4. การจัดการน้ำ</Text>
+          <TouchableOpacity
+            style={[
+              styles.bigChip,
+              waterNotDone && { backgroundColor: '#fff7ed', borderColor: '#f97316' },
+            ]}
+            onPress={() => setWaterNotDone((notDone) => !notDone)}
+          >
+            <Text style={[styles.bigChipText, waterNotDone && { color: '#c2410c', fontWeight: 'bold' }]}>
+              {waterNotDone ? '✓ วันนี้ไม่ได้ทำกิจกรรมนี้' : 'วันนี้ไม่ได้ทำกิจกรรมนี้'}
+            </Text>
+          </TouchableOpacity>
 
+          {!waterNotDone && (
+            <>
           <Text style={styles.label}>แหล่งน้ำที่ใช้:</Text>
           <View style={styles.chipGroup}>
             {['บ่อน้ำประจำแปลง', 'ธนาคารน้ำใต้ดิน', 'ระบบโซลาร์เซลล์', 'น้ำชลประทาน'].map((w) => (
@@ -469,11 +528,26 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
               <Text style={styles.micBtnText}>{listeningSection === 'การจัดการน้ำ' ? '🔴 กำลังฟัง... (กดเพื่อหยุด)' : '🎙️ พูดเพื่อพิมพ์'}</Text>
             </TouchableOpacity>
           </View>
+            </>
+          )}
         </View>
 
         {/* 5. แรงงาน */}
         <View style={styles.card}>
           <Text style={[styles.sectionTitle, { color: themePrimary }]}>👨‍🌾 5. ผู้ปฏิบัติงาน & เครื่องจักร</Text>
+          <TouchableOpacity
+            style={[
+              styles.bigChip,
+              workerNotDone && { backgroundColor: '#fff7ed', borderColor: '#f97316' },
+            ]}
+            onPress={() => setWorkerNotDone((notDone) => !notDone)}
+          >
+            <Text style={[styles.bigChipText, workerNotDone && { color: '#c2410c', fontWeight: 'bold' }]}>
+              {workerNotDone ? '✓ วันนี้ไม่ได้ทำกิจกรรมนี้' : 'วันนี้ไม่ได้ทำกิจกรรมนี้'}
+            </Text>
+          </TouchableOpacity>
+          {!workerNotDone && (
+            <>
           <View style={styles.chipGroup}>
             {['ทำเองในครัวเรือน', 'จ้างแรงงาน', 'กลุ่มวานแรง'].map((wrk) => (
               <TouchableOpacity
@@ -501,12 +575,33 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
               <Text style={styles.micBtnText}>{listeningSection === 'แรงงานเครื่องจักร' ? '🔴 กำลังฟัง... (กดเพื่อหยุด)' : '🎙️ พูดเพื่อพิมพ์'}</Text>
             </TouchableOpacity>
           </View>
+            </>
+          )}
         </View>
 
-        {/* 6. ความชื้น */}
+        {/* 6. กิจกรรมเพิ่มเติม */}
+        <View style={styles.card}>
+          <Text style={[styles.sectionTitle, { color: themePrimary }]}>
+            🌱 6. กิจกรรมที่ทำเพิ่มเติมนอกเหนือจากกิจกรรมข้างต้น
+          </Text>
+          <View style={[styles.speechInputContainer, { borderColor: themeBorder }]}>
+            <TextInput
+              style={styles.speechInput}
+              placeholder="ระบุกิจกรรมเพิ่มเติม (ถ้ามี)"
+              value={additionalActivity}
+              onChangeText={setAdditionalActivity}
+              multiline
+            />
+            <TouchableOpacity style={[styles.micBtn, { backgroundColor: themePrimary }]} onPress={() => handleSpeechToText(additionalActivity, setAdditionalActivity, 'กิจกรรมเพิ่มเติม')}>
+              <Text style={styles.micBtnText}>{listeningSection === 'กิจกรรมเพิ่มเติม' ? '🔴 กำลังฟัง... (กดเพื่อหยุด)' : '🎙️ พูดเพื่อพิมพ์'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* 7. ความชื้น */}
         {isOfficer && (
           <View style={[styles.card, { borderColor: themeBorder, borderWidth: 2 }]}>
-            <Text style={[styles.sectionTitle, { color: themePrimary }]}>💧 6. ระบุค่าความชื้น (Option)</Text>
+            <Text style={[styles.sectionTitle, { color: themePrimary }]}>💧 7. ระบุค่าความชื้น (Option)</Text>
             <Text style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>
               หากกรอกความชื้นด้วย ระบบจะปลดล็อกสถานะ "วัดความชื้น" ให้เกษตรกรทันที
             </Text>

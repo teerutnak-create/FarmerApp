@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Text,
   TextInput,
@@ -80,6 +80,8 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
   const [selectedMonth, setSelectedMonth] = useState('พฤศจิกายน');
   const [cropName, setCropName] = useState('');
   const [isListening, setIsListening] = useState(false);
+  const speechRecognitionRef = useRef(null);
+  const nativeVoiceRef = useRef(null);
   const [cropPlans, setCropPlans] = useState([
     { id: '1', month: 'พฤศจิกายน', crop: 'ข้าวหอมมะลิ 105 (ข้าวนาปี)' },
     { id: '2', month: 'มกราคม', crop: 'ถั่วพร้า / ปุ๋ยพืชสดปรับปรุงดิน' },
@@ -118,6 +120,30 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
 
     return () => clearInterval(interval);
   }, [isLiveMoisture]);
+
+  useEffect(() => {
+    return () => {
+      if (speechRecognitionRef.current) {
+        const recognition = speechRecognitionRef.current;
+        recognition.onresult = null;
+        recognition.onerror = null;
+        recognition.onend = null;
+        try {
+          recognition.abort();
+        } catch (error) {
+          console.warn('Stop browser speech recognition failed:', error);
+        }
+        speechRecognitionRef.current = null;
+      }
+
+      if (nativeVoiceRef.current) {
+        nativeVoiceRef.current
+          .destroy()
+          .catch((error) => console.warn('Stop native speech recognition failed:', error));
+        nativeVoiceRef.current = null;
+      }
+    };
+  }, []);
 
   const back = () => setPage('home');
 
@@ -165,20 +191,95 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
     Alert.alert('บันทึกแล้ว ✅', 'ความชื้น ' + v + '%');
   };
 
-  const handleVoiceRecordAnnual = () => {
+  const handleVoiceRecordAnnual = async () => {
+    if (isListening) return;
     setIsListening(true);
-    setTimeout(() => {
-      const sampleVoiceInputs = [
-        'ปลูกข้าวโพดหลังนา',
-        'เตรียมแปลงปลูกถั่วเหลือง',
-        'หว่านข้าวหอมมะลิกข 15',
-        'ปลูกผักบุ้งจีนเพิ่มรายได้',
-      ];
-      const randomText = sampleVoiceInputs[Math.floor(Math.random() * sampleVoiceInputs.length)];
-      setCropName(randomText);
+
+    if (Platform.OS === 'web') {
+      const SpeechRecognition =
+        typeof window !== 'undefined' &&
+        (window.SpeechRecognition || window.webkitSpeechRecognition);
+
+      if (!SpeechRecognition) {
+        setIsListening(false);
+        Alert.alert('ไม่รองรับ', 'เบราว์เซอร์นี้ไม่รองรับการรู้จำเสียง แนะนำให้ใช้ Google Chrome');
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'th-TH';
+      recognition.interimResults = true;
+      recognition.continuous = false;
+      recognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = 0; i < event.results.length; i += 1) {
+          transcript += `${event.results[i][0].transcript} `;
+        }
+        if (transcript.trim()) setCropName(transcript.trim());
+      };
+      recognition.onerror = (event) => {
+        setIsListening(false);
+        if (event.error !== 'aborted') {
+          const message =
+            event.error === 'not-allowed' || event.error === 'service-not-allowed'
+              ? 'กรุณาอนุญาตให้เบราว์เซอร์ใช้ไมโครโฟน แล้วลองอีกครั้ง'
+              : event.error === 'no-speech'
+                ? 'ไม่ได้ยินเสียงพูด กรุณาลองพูดอีกครั้ง'
+                : `กรุณาลองอีกครั้ง (${event.error})`;
+          Alert.alert('จับเสียงไม่สำเร็จ', message);
+        }
+      };
+      recognition.onend = () => {
+        speechRecognitionRef.current = null;
+        setIsListening(false);
+      };
+      speechRecognitionRef.current = recognition;
+
+      try {
+        recognition.start();
+      } catch (error) {
+        speechRecognitionRef.current = null;
+        setIsListening(false);
+        Alert.alert('เริ่มใช้ไมโครโฟนไม่ได้', error.message || 'กรุณาลองอีกครั้ง');
+      }
+      return;
+    }
+
+    try {
+      const Voice = require('@react-native-voice/voice').default;
+      nativeVoiceRef.current = Voice;
+      Voice.onSpeechResults = (event) => {
+        const transcript = event.value?.[0];
+        if (transcript) setCropName(transcript.trim());
+      };
+      Voice.onSpeechPartialResults = (event) => {
+        const transcript = event.value?.[0];
+        if (transcript) setCropName(transcript.trim());
+      };
+      Voice.onSpeechEnd = () => setIsListening(false);
+      Voice.onSpeechError = (event) => {
+        setIsListening(false);
+        Alert.alert(
+          'จับเสียงไม่สำเร็จ',
+          event.error || 'กรุณาตรวจสอบสิทธิ์ไมโครโฟนและลองพูดอีกครั้ง'
+        );
+      };
+
+      const available = await Voice.isAvailable();
+      if (!available) {
+        setIsListening(false);
+        Alert.alert('ไม่พบระบบรู้จำเสียง', 'กรุณาตรวจสอบว่ามีบริการรู้จำเสียงในอุปกรณ์');
+        return;
+      }
+
+      await Voice.start('th-TH');
+    } catch (error) {
       setIsListening(false);
-      Alert.alert('ถอดข้อความเสียงสำเร็จ 🎙️', `รับค่าเสียงพูด: "${randomText}"`);
-    }, 2500);
+      Alert.alert(
+        'เริ่มใช้ไมโครโฟนไม่ได้',
+        error.message || 'กรุณาเปิดแอปด้วย Development Build และอนุญาตใช้ไมโครโฟน'
+      );
+    }
   };
 
   const handleAddCropPlan = () => {
@@ -329,6 +430,7 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
 
               <View style={f.sectionCard}>
                 <Text style={f.sectionTitle}>💰 ราคารับซื้อข้าวเปลือกหอมมะลิ (วันนี้)</Text>
+                <Text style={f.priceUpdated}>อัปเดตล่าสุด 18 พ.ย. 2569 • ข้อมูลตัวอย่าง</Text>
                 <View style={f.priceRow}>
                   <View style={f.priceCard}>
                     <Text style={f.priceLabel}>ข้าวเปลือกแห้ง (ชื้นไม่เกิน 15%)</Text>
@@ -338,6 +440,96 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
                     <Text style={f.priceLabel}>ข้าวเปลือกเกี่ยวสด (ชื้น 25%)</Text>
                     <Text style={f.priceValue}>12,800 <Text style={f.priceUnit}>บาท/ตัน</Text></Text>
                   </View>
+                </View>
+                <TouchableOpacity style={f.aiPriceButton} onPress={() => setPage('assistant')}>
+                  <Text style={f.aiPriceButtonText}>🤖 ถาม AI วิธีลดความชื้นข้าว</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={f.sectionCard}>
+                <Text style={f.sectionTitle}>🌤️ พยากรณ์อากาศและคำแนะนำการทำนา • ต.ผักไหม</Text>
+                <View style={f.weatherSummary}>
+                  <View>
+                    <Text style={f.weatherCaption}>อุณหภูมิโดยประมาณ</Text>
+                    <Text style={f.weatherTemperature}>☀️ 29°C</Text>
+                  </View>
+                  <View style={f.weatherAdvice}>
+                    <Text style={f.weatherAdviceTitle}>คำแนะนำ</Text>
+                    <Text style={f.weatherAdviceText}>เหมาะแก่การตากข้าว</Text>
+                  </View>
+                </View>
+                <Text style={f.sampleNote}>พยากรณ์ตัวอย่าง 3 วันข้างหน้า</Text>
+                <View style={f.forecastRow}>
+                  {[
+                    { day: 'พฤ. 19 พ.ย.', temperature: '31° / 22°', rain: 'ฝน 10%' },
+                    { day: 'ศ. 20 พ.ย.', temperature: '30° / 22°', rain: 'ฝน 35%' },
+                    { day: 'ส. 21 พ.ย.', temperature: '29° / 21°', rain: 'ฝน 60%' },
+                  ].map((forecast) => (
+                    <View key={forecast.day} style={f.forecastDay}>
+                      <Text style={f.forecastDayTitle}>{forecast.day}</Text>
+                      <Text style={f.forecastTemperature}>{forecast.temperature}</Text>
+                      <Text style={f.forecastRain}>{forecast.rain}</Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={f.weatherFootnote}>ช่วงปลายสัปดาห์ควรระวังฝนก่อนตากหรือเก็บเกี่ยว</Text>
+              </View>
+
+              <View style={f.sectionCard}>
+                <Text style={f.sectionTitle}>🗓️ ปฏิทินรอบการผลิตของกลุ่ม</Text>
+                <Text style={f.sampleNote}>สถานะตัวอย่างของสมาชิกส่วนใหญ่</Text>
+                <View style={f.productionStageRow}>
+                  {['เตรียมดิน', 'หว่าน', 'บำรุง', 'เก็บเกี่ยว'].map((stage, index) => (
+                    <View
+                      key={stage}
+                      style={[
+                        f.productionStage,
+                        index < 2 && f.productionStageComplete,
+                        index === 2 && f.productionStageCurrent,
+                      ]}
+                    >
+                      <Text style={[
+                        f.productionStageNumber,
+                        index < 2 && f.productionStageNumberComplete,
+                        index === 2 && f.productionStageNumberCurrent,
+                      ]}>
+                        {index < 2 ? '✓' : index + 1}
+                      </Text>
+                      <Text style={[
+                        f.productionStageLabel,
+                        index === 2 && f.productionStageLabelCurrent,
+                      ]}>
+                        {stage}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={f.currentStageText}>ช่วงปัจจุบัน: บำรุงต้นข้าว</Text>
+              </View>
+
+              <View style={f.sectionCard}>
+                <Text style={f.sectionTitle}>📊 ภาพรวมการบันทึกและต้นทุน</Text>
+                <View style={f.communityGrid}>
+                  <View style={[f.communityStatBox, { backgroundColor: '#f1f8e9' }]}>
+                    <Text style={f.communityStatIcon}>📝</Text>
+                    <Text style={f.communityStatNum}>18/24 ราย</Text>
+                    <Text style={f.communityStatLabel}>สมาชิกบันทึกข้อมูลแล้ว</Text>
+                  </View>
+                  <View style={[f.communityStatBox, { backgroundColor: '#fffde7' }]}>
+                    <Text style={f.communityStatIcon}>💵</Text>
+                    <Text style={f.communityStatNum}>1,250 บาท/ไร่</Text>
+                    <Text style={f.communityStatLabel}>ต้นทุนเฉลี่ยต่อไร่</Text>
+                  </View>
+                </View>
+                <Text style={f.sampleNote}>ข้อมูลตัวอย่างกลุ่ม</Text>
+              </View>
+
+              <View style={f.sectionCard}>
+                <Text style={f.sectionTitle}>📣 ประกาศและนัดหมายจากกลุ่ม</Text>
+                <View style={f.announcementCard}>
+                  <Text style={f.announcementMeta}>ประกาศตัวอย่างจากประธานกลุ่ม • 17 พ.ย. 2569</Text>
+                  <Text style={f.announcementTitle}>นัดสมาชิกนำตัวอย่างข้าวมาตรวจความชื้น</Text>
+                  <Text style={f.announcementText}>วันศุกร์ เวลา 09.00 น. ณ ศาลากลุ่ม ก่อนวางแผนจำหน่ายผลผลิต</Text>
                 </View>
               </View>
             </>
@@ -797,6 +989,80 @@ const f = StyleSheet.create({
   priceLabel: { fontSize: 11, color: '#555', fontWeight: '500' },
   priceValue: { fontSize: 16, fontWeight: 'bold', color: '#1b5e20', marginTop: 2 },
   priceUnit: { fontSize: 11, fontWeight: 'normal', color: '#666' },
+  priceUpdated: { fontSize: 10, color: '#78816f', marginTop: -4 },
+  aiPriceButton: {
+    alignItems: 'center',
+    backgroundColor: '#e8f5e9',
+    borderColor: '#a5d6a7',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    marginTop: 10,
+  },
+  aiPriceButtonText: { color: '#1b5e20', fontSize: 11, fontWeight: 'bold', textAlign: 'center' },
+
+  weatherSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f9fbe7',
+    borderRadius: 10,
+    padding: 10,
+  },
+  weatherCaption: { fontSize: 10, color: '#66705e' },
+  weatherTemperature: { fontSize: 21, fontWeight: 'bold', color: '#1b5e20', marginTop: 2 },
+  weatherAdvice: {
+    backgroundColor: '#e8f5e9',
+    borderRadius: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 9,
+    maxWidth: '58%',
+  },
+  weatherAdviceTitle: { fontSize: 9, color: '#55705a', fontWeight: 'bold' },
+  weatherAdviceText: { fontSize: 11, color: '#1b5e20', fontWeight: 'bold', marginTop: 2 },
+  sampleNote: { fontSize: 9, color: '#8a8f7e', marginTop: 6 },
+  forecastRow: { flexDirection: 'row', gap: 6, marginTop: 6 },
+  forecastDay: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: '#f7f8ef',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 3,
+    borderWidth: 1,
+    borderColor: '#e4e9d8',
+  },
+  forecastDayTitle: { fontSize: 9, color: '#52614e', fontWeight: 'bold', textAlign: 'center' },
+  forecastTemperature: { fontSize: 10, color: '#1b5e20', fontWeight: 'bold', marginTop: 5 },
+  forecastRain: { fontSize: 10, color: '#3578a5', marginTop: 3 },
+  weatherFootnote: { fontSize: 10, color: '#66705e', marginTop: 7 },
+
+  productionStageRow: { flexDirection: 'row', gap: 5, marginTop: 8 },
+  productionStage: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f7f8ef',
+    borderColor: '#e4e9d8',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 2,
+  },
+  productionStageComplete: { backgroundColor: '#e8f5e9', borderColor: '#c8e6c9' },
+  productionStageCurrent: { backgroundColor: '#2e7d32', borderColor: '#2e7d32' },
+  productionStageNumber: { color: '#798071', fontSize: 10, fontWeight: 'bold' },
+  productionStageNumberComplete: { color: '#2e7d32' },
+  productionStageNumberCurrent: { color: '#ffffff' },
+  productionStageLabel: { color: '#66705e', fontSize: 9, marginTop: 3, textAlign: 'center' },
+  productionStageLabelCurrent: { color: '#ffffff', fontWeight: 'bold' },
+  currentStageText: { color: '#2e7d32', fontSize: 10, fontWeight: 'bold', marginTop: 8 },
+
+  announcementCard: { backgroundColor: '#f9fbe7', borderRadius: 10, padding: 10, borderLeftWidth: 4, borderLeftColor: '#7cb342' },
+  announcementMeta: { fontSize: 9, color: '#78816f' },
+  announcementTitle: { fontSize: 12, color: '#1b5e20', fontWeight: 'bold', marginTop: 5 },
+  announcementText: { fontSize: 11, color: '#596453', lineHeight: 17, marginTop: 3 },
 
   statusCard: { backgroundColor: '#ffffff', borderRadius: 12, padding: 12, elevation: 1 },
   sectionTitle: { color: '#2e7d32', fontWeight: 'bold', fontSize: 13, marginBottom: 8 },

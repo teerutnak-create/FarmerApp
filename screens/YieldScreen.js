@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { notify } from '../utils/notify';
 import { PLOTS } from '../data/options';
 import { CROPS, SEED_SOURCES, RICE_TARGET } from '../data/profile';
 
@@ -36,20 +37,7 @@ export default function YieldScreen({ user, onSave, onClose }) {
       summary: `ผลผลิต ${crop} · ${plot} · ${kg} กก./ไร่ · ${lot}`,
     });
 
-    // หน้าต่างแจ้งเตือนบันทึกสำเร็จ แล้วเด้งกลับหน้าหลักเมื่อกด ตกลง
-    Alert.alert(
-      'บันทึกสำเร็จ! ✅',
-      `เลขล็อตสินค้าของท่านคือ:\n${lot}`,
-      [
-        {
-          text: 'ตกลง',
-          onPress: () => {
-            if (onClose) onClose();
-          },
-        },
-      ],
-      { cancelable: false }
-    );
+    notify('บันทึกสำเร็จ! ✅', `เลขล็อตสินค้าของท่านคือ:\n${lot}`, onClose);
   };
 
   return (

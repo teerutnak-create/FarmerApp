@@ -1,3 +1,5 @@
+import { getSensorContext } from '../lib/sensorContext.js';
+
 const PREFERRED_MODELS = [
   'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
@@ -72,6 +74,20 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-cache');
 
   try {
+    let sensorContext = '';
+    const asksAboutMoisture = messages.some((message) =>
+      /ความชื้น|esp32|เซนเซอร์|sensor|moisture/i.test(String(message.content || ''))
+    );
+    if (asksAboutMoisture) {
+      try {
+        sensorContext = await getSensorContext();
+      } catch (sensorError) {
+        console.error('Reading ESP32 sensor context failed:', sensorError);
+        sensorContext =
+          '\n\nข้อมูลความชื้น ESP32: อ่านข้อมูลไม่ได้ในขณะนี้ ห้ามคาดเดาค่าปัจจุบัน';
+      }
+    }
+
     const contents = messages.slice(-12).map((m) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: String(m.content || '') }],
@@ -94,7 +110,9 @@ export default async function handler(req, res) {
       }
 
       const payload = JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM + String(context).slice(0, 3000) }] },
+        systemInstruction: {
+          parts: [{ text: SYSTEM + String(context).slice(0, 3000) + sensorContext.slice(0, 3000) }],
+        },
         contents,
         generationConfig: genConfig,
       });
