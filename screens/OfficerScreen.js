@@ -14,9 +14,66 @@ import {
   TextInput,
   Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { USERS } from '../data/users';
 import * as ImagePicker from 'expo-image-picker';
 import DailyLogScreen from './DailyLogScreen';
+import {
+  FARMER_LOCATIONS_KEY,
+  FARMER_VISITS_KEY,
+  hasValidGpsCoordinates,
+} from '../utils/farmerMapData';
+
+const USERS_KEY = 'registered_users';
+
+const SAMPLE_MAP_FARMERS = [
+  {
+    farmer: { id: 'sample-sommai', name: 'ลุงสมหมาย', isSample: true },
+    location: { lat: 14.874314, lng: 103.839757 },
+  },
+  {
+    farmer: { id: 'sample-somsri', name: 'ป้าสมศรี', isSample: true },
+    location: { lat: 14.876, lng: 103.842 },
+  },
+  {
+    farmer: { id: 'sample-boonmee', name: 'ลุงบุญมี', isSample: true },
+    location: { lat: 14.8722, lng: 103.8375 },
+  },
+];
+
+function getAgeFromDob(dob) {
+  if (typeof dob !== 'string') return null;
+  const parts = dob.split('/').map(Number);
+  if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part))) return null;
+
+  const [day, month, yearBE] = parts;
+  const birthDate = new Date(yearBE - 543, month - 1, day);
+  if (
+    birthDate.getFullYear() !== yearBE - 543 ||
+    birthDate.getMonth() !== month - 1 ||
+    birthDate.getDate() !== day
+  ) {
+    return null;
+  }
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  if (
+    today.getMonth() < birthDate.getMonth() ||
+    (today.getMonth() === birthDate.getMonth() && today.getDate() < birthDate.getDate())
+  ) {
+    age--;
+  }
+  return age >= 0 ? age : null;
+}
+
+function parseStoredObject(raw, key) {
+  const parsed = raw ? JSON.parse(raw) : {};
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`${key} data must be an object`);
+  }
+  return parsed;
+}
 
 let MapContainer, TileLayer, MarkerWeb, PolygonWeb, useMapEvents;
 if (Platform.OS === 'web') {
@@ -36,10 +93,17 @@ if (Platform.OS !== 'web') {
   Marker = RNMaps.Marker;
 }
 
-export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRefresh, onSaveLogForFarmer, onUpdateLog, onDeleteLog, onDeleteActivityField }) {
+export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout, onRefresh, onSaveLogForFarmer, onUpdateLog, onDeleteLog, onDeleteActivityField }) {
   const [currentPage, setCurrentPage] = useState('home');
   const [auditTab, setAuditTab] = useState('gap');
   const [selectedFarmer, setSelectedFarmer] = useState(null);
+  const [registeredFarmers, setRegisteredFarmers] = useState([]);
+  const [farmLocations, setFarmLocations] = useState({});
+  const [fieldVisits, setFieldVisits] = useState({});
+  const [selectedMapFarmer, setSelectedMapFarmer] = useState(null);
+  const [mapFocus, setMapFocus] = useState(null);
+  const [mapFocusVersion, setMapFocusVersion] = useState(0);
+  const [savingVisit, setSavingVisit] = useState(false);
 
   const [targetFarmerForAdd, setTargetFarmerForAdd] = useState(null);
   const [editingLogData, setEditingLogData] = useState(null);
@@ -47,6 +111,83 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
   const [showReportModal, setShowReportModal] = useState(false);
   const [selectedLog, setSelectedLog] = useState(null);
   const [showManageModal, setShowManageModal] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadRegisteredFarmers = async () => {
+      try {
+        const storedUsers = await AsyncStorage.getItem(USERS_KEY);
+        if (!storedUsers) return;
+
+        const parsedUsers = JSON.parse(storedUsers);
+        if (!Array.isArray(parsedUsers)) {
+          throw new Error('Registered users data must be an array');
+        }
+
+        const farmers = parsedUsers
+          .filter(
+            (registeredUser) =>
+              registeredUser &&
+              registeredUser.role === 'farmer' &&
+              registeredUser.id &&
+              typeof registeredUser.name === 'string'
+          )
+          .map((registeredUser) => ({
+            id: registeredUser.id,
+            name: registeredUser.name,
+            login: registeredUser.login || '',
+            dob: registeredUser.dob || '',
+            age: Number.isFinite(registeredUser.age)
+              ? registeredUser.age
+              : getAgeFromDob(registeredUser.dob),
+            role: 'farmer',
+          }));
+
+        if (isMounted) setRegisteredFarmers(farmers);
+      } catch (error) {
+        console.warn('Unable to load registered farmers:', error);
+      }
+    };
+
+    loadRegisteredFarmers();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadStoredObject = async (key, setValue) => {
+      try {
+        const raw = await AsyncStorage.getItem(key);
+        const storedObject = parseStoredObject(raw, key);
+        if (isMounted) setValue(storedObject);
+      } catch (error) {
+        console.warn(`Unable to load ${key}:`, error);
+      }
+    };
+
+    Promise.all([
+      loadStoredObject(FARMER_LOCATIONS_KEY, setFarmLocations),
+      loadStoredObject(FARMER_VISITS_KEY, setFieldVisits),
+    ]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const usersById = new Map();
+  for (const candidate of [
+    ...USERS,
+    ...(Array.isArray(allUsers) ? allUsers : []),
+    ...registeredFarmers,
+  ]) {
+    if (candidate && candidate.id) usersById.set(candidate.id, candidate);
+  }
+  const usersForDisplay = Array.from(usersById.values());
 
   // States สำหรับ GIS & GPS
   const [coords, setCoords] = useState('Lat: 15.118624, Long: 104.322015');
@@ -82,7 +223,7 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
   const handleExportPDF = () => {
     if (Platform.OS === 'web') {
       const printWindow = window.open('', '_blank');
-      const farmers = (allUsers && allUsers.length > 0 ? allUsers : USERS).filter(u => u.role === 'farmer');
+      const farmers = usersForDisplay.filter(u => u.role === 'farmer');
 
       let htmlContent = `
         <html>
@@ -182,13 +323,110 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
     );
   };
 
-  const farmersList = (allUsers && allUsers.length > 0 ? allUsers : USERS).filter((u) => u.role === 'farmer');
+  const farmersList = usersForDisplay.filter((u) => u.role === 'farmer');
+  const latestLocations = { ...farmLocations };
+  for (const log of logs || []) {
+    if (
+      log &&
+      log.farmerId &&
+      (log.type === 'ถ่ายรูปแปลง' || log.photoUri) &&
+      hasValidGpsCoordinates(log.lat, log.lng)
+    ) {
+      const capturedAt = log.photoTime || log.time;
+      const previousTime = Date.parse(latestLocations[log.farmerId]?.capturedAt) || 0;
+      const capturedTime = Date.parse(capturedAt) || 0;
+      if (previousTime <= capturedTime) {
+        latestLocations[log.farmerId] = {
+          lat: log.lat,
+          lng: log.lng,
+          accuracy: log.accuracy,
+          plot: log.plot,
+          capturedAt,
+        };
+      }
+    }
+  }
+
+  const farmersWithLocations = farmersList
+    .map((farmer) => ({ farmer, location: latestLocations[farmer.id] }))
+    .filter(({ location }) => location && hasValidGpsCoordinates(location.lat, location.lng));
+  const mapFarmersWithLocations = [...farmersWithLocations, ...SAMPLE_MAP_FARMERS];
+  const sampleFarmerIds = new Set(SAMPLE_MAP_FARMERS.map(({ farmer }) => farmer.id));
+  const sampleFarmerNames = new Set(SAMPLE_MAP_FARMERS.map(({ farmer }) => farmer.name));
+  const isSampleMapFarmer = (farmer) =>
+    farmer.isSample || sampleFarmerIds.has(farmer.id) || sampleFarmerNames.has(farmer.name);
+  const farmersWithoutLocations = farmersList.filter((farmer) => {
+    if (isSampleMapFarmer(farmer)) return false;
+    const location = latestLocations[farmer.id];
+    return !location || !hasValidGpsCoordinates(location.lat, location.lng);
+  });
+  const latitudes = mapFarmersWithLocations.map(({ location }) => location.lat);
+  const longitudes = mapFarmersWithLocations.map(({ location }) => location.lng);
+  const minLatitude = latitudes.length ? Math.min(...latitudes) : 0;
+  const maxLatitude = latitudes.length ? Math.max(...latitudes) : 0;
+  const minLongitude = longitudes.length ? Math.min(...longitudes) : 0;
+  const maxLongitude = longitudes.length ? Math.max(...longitudes) : 0;
+  const mapCenter = {
+    latitude: (minLatitude + maxLatitude) / 2,
+    longitude: (minLongitude + maxLongitude) / 2,
+  };
+  const latitudeDelta = Math.max((maxLatitude - minLatitude) * 1.5, 0.005);
+  const longitudeDelta = Math.max((maxLongitude - minLongitude) * 1.5, 0.005);
+  const maxCoordinateSpan = Math.max(maxLatitude - minLatitude, maxLongitude - minLongitude, 0.001);
+  const mapZoom = Math.min(18, Math.max(3, Math.floor(Math.log2(360 / maxCoordinateSpan)) - 1));
+  const mapKey = `${mapFarmersWithLocations
+    .map(({ farmer, location }) => `${farmer.id}:${location.lat},${location.lng}`)
+    .join('|')}:${mapFocusVersion}`;
+  const focusedMapCenter = mapFocus || mapCenter;
+  const focusedLatitudeDelta = mapFocus ? 0.008 : latitudeDelta;
+  const focusedLongitudeDelta = mapFocus ? 0.008 : longitudeDelta;
+  const focusedMapZoom = mapFocus ? 16 : mapZoom;
+  const selectedMapLocation = selectedMapFarmer
+    ? selectedMapFarmer.isSample
+      ? selectedMapFarmer.sampleLocation
+      : latestLocations[selectedMapFarmer.id]
+    : null;
+  const selectedVisit = selectedMapFarmer ? fieldVisits[selectedMapFarmer.id] : null;
 
   const showAlert = (title, message) => {
     if (Platform.OS === 'web') {
       window.alert(`${title}\n${message}`);
     } else {
       Alert.alert(title, message);
+    }
+  };
+
+  const handleSelectMapFarmer = (farmer, location) => {
+    setMapFocus({ latitude: location.lat, longitude: location.lng });
+    setMapFocusVersion((version) => version + 1);
+    setSelectedMapFarmer(
+      farmer.isSample ? { ...farmer, sampleLocation: location } : farmer
+    );
+  };
+
+  const handleMarkVisited = async () => {
+    if (!selectedMapFarmer || savingVisit) return;
+    setSavingVisit(true);
+
+    try {
+      const rawVisits = await AsyncStorage.getItem(FARMER_VISITS_KEY);
+      const storedVisits = parseStoredObject(rawVisits, FARMER_VISITS_KEY);
+      const visitRecord = {
+        visitedAt: new Date().toISOString(),
+        visitedBy: user?.name || 'เจ้าหน้าที่',
+      };
+      const updatedVisits = {
+        ...storedVisits,
+        [selectedMapFarmer.id]: visitRecord,
+      };
+      await AsyncStorage.setItem(FARMER_VISITS_KEY, JSON.stringify(updatedVisits));
+      setFieldVisits(updatedVisits);
+      showAlert('บันทึกสถานะแล้ว', `บันทึกว่าลงพื้นที่ของคุณ${selectedMapFarmer.name}แล้ว`);
+    } catch (error) {
+      console.error('Saving field visit status failed:', error);
+      showAlert('บันทึกไม่สำเร็จ', 'ไม่สามารถบันทึกสถานะลงพื้นที่ได้ กรุณาลองอีกครั้ง');
+    } finally {
+      setSavingVisit(false);
     }
   };
 
@@ -448,21 +686,103 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
               <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1b5e20', marginTop: 12, marginBottom: 6 }}>
                 🗺️ พิกัดแปลงเกษตรกรในพื้นที่ ต.ผักไหม:
               </Text>
+              <Text style={{ fontSize: 10, color: '#7c3aed', marginBottom: 6 }}>
+                หมุดตัวอย่างอยู่แถว ต.ผักไหม อ.ศีขรภูมิ จ.สุรินทร์ เป็นพิกัดสมมติ ไม่ใช่ GPS จริง
+              </Text>
               <View style={o.mapSimContainer}>
-                <TouchableOpacity
-                  style={[o.mapPin, { top: '20%', left: '15%', backgroundColor: '#2e7d32' }]}
-                  onPress={() => showAlert('แปลงลุงสมหมาย (f001)', 'พิกัด: Lat 15.1186, Long 104.3220\nสถานะ: ข้อมูลครบถ้วน')}
-                >
-                  <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>📍 แปลงลุงสมหมาย (Lat: 15.1186)</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[o.mapPin, { bottom: '25%', right: '15%', backgroundColor: '#d97706' }]}
-                  onPress={() => showAlert('แปลงป้าสมศรี (f002)', 'พิกัด: Lat 15.1205, Long 104.3255\nสถานะ: รอวัดความชื้น')}
-                >
-                  <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>📍 แปลงป้าสมศรี (Lat: 15.1205)</Text>
-                </TouchableOpacity>
+                {mapFarmersWithLocations.length === 0 ? (
+                  <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: 'bold', textAlign: 'center', padding: 12 }}>
+                    ยังไม่มีรูปถ่ายแปลงที่บันทึกพิกัด GPS
+                  </Text>
+                ) : Platform.OS === 'web' ? (
+                  <div style={{ height: '100%', width: '100%' }}>
+                    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                    <MapContainer
+                      key={mapKey}
+                      center={[focusedMapCenter.latitude, focusedMapCenter.longitude]}
+                      zoom={focusedMapZoom}
+                      style={{ height: '100%', width: '100%' }}
+                    >
+                      <TileLayer
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                      />
+                      {mapFarmersWithLocations.map(({ farmer, location }) => {
+                        const isVisited = Boolean(fieldVisits[farmer.id]?.visitedAt);
+                        return (
+                          <MarkerWeb
+                            key={farmer.id}
+                            position={[location.lat, location.lng]}
+                            title={`${farmer.name} · ${farmer.isSample ? 'พิกัดตัวอย่าง · ' : ''}${isVisited ? 'ลงพื้นที่แล้ว' : 'ยังไม่ลงพื้นที่'}`}
+                            eventHandlers={{ click: () => handleSelectMapFarmer(farmer, location) }}
+                          />
+                        );
+                      })}
+                    </MapContainer>
+                  </div>
+                ) : (
+                  <MapView
+                    key={mapKey}
+                    style={{ flex: 1 }}
+                    initialRegion={{
+                      ...focusedMapCenter,
+                      latitudeDelta: focusedLatitudeDelta,
+                      longitudeDelta: focusedLongitudeDelta,
+                    }}
+                  >
+                    {mapFarmersWithLocations.map(({ farmer, location }) => {
+                      const isVisited = Boolean(fieldVisits[farmer.id]?.visitedAt);
+                      return (
+                        <Marker
+                          key={farmer.id}
+                          coordinate={{ latitude: location.lat, longitude: location.lng }}
+                          pinColor={isVisited ? 'green' : farmer.isSample ? 'purple' : 'orange'}
+                          title={`คุณ${farmer.name}`}
+                          description={`${farmer.isSample ? 'พิกัดตัวอย่าง · ' : ''}${isVisited ? 'ลงพื้นที่แล้ว' : 'ยังไม่ลงพื้นที่'}`}
+                          onPress={() => handleSelectMapFarmer(farmer, location)}
+                        />
+                      );
+                    })}
+                  </MapView>
+                )}
               </View>
+              <View style={o.mapLocationNotice}>
+                <Text style={{ fontSize: 10, color: '#6d28d9', fontWeight: 'bold', marginBottom: 5 }}>
+                  รายชื่อที่มีพิกัด (กดชื่อเพื่อไปยังหมุด; รายการตัวอย่างไม่ใช่ GPS จริง):
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
+                  {mapFarmersWithLocations.map(({ farmer, location }) => (
+                    <TouchableOpacity
+                      key={farmer.id}
+                      style={o.mapLocationTag}
+                      onPress={() => handleSelectMapFarmer(farmer, location)}
+                    >
+                      <Text style={{ fontSize: 10, color: farmer.isSample ? '#6d28d9' : '#166534' }}>
+                        {farmer.name}: {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
+                        {farmer.isSample ? ' (ตัวอย่าง)' : ''}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+              {farmersWithoutLocations.length > 0 && (
+                <View style={o.mapLocationNotice}>
+                  <Text style={{ fontSize: 10, color: '#795548', fontWeight: 'bold', marginBottom: 5 }}>
+                    ยังไม่มีพิกัดจากรูปถ่าย GPS:
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
+                    {farmersWithoutLocations.map((farmer) => (
+                      <TouchableOpacity
+                        key={farmer.id}
+                        style={o.mapLocationTag}
+                        onPress={() => setSelectedMapFarmer(farmer)}
+                      >
+                        <Text style={{ fontSize: 10, color: '#795548' }}>{farmer.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
             </View>
 
             {/* รายชื่อเกษตรกร */}
@@ -861,12 +1181,14 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                             {renderReportRow('รายละเอียดกิจกรรม', selectedLog.activityLog.activityNote, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'activityNote', 'รายละเอียดกิจกรรม'))}
 
                             <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>ปัจจัยที่ใช้ & แหล่งน้ำ</Text>
-                            {renderReportRow('ปุ๋ย/ปัจจัยที่ใช้', selectedLog.activityLog.input?.type ? `${selectedLog.activityLog.input.type} (${selectedLog.activityLog.input.quantity})` : null, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'input', 'ปุ๋ย/ปัจจัยที่ใช้'))}
-                            {renderReportRow('น้ำหมัก/สารทำเอง', selectedLog.activityLog.selfMade?.formula, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'selfMade', 'น้ำหมัก/สารทำเอง'))}
-                            {renderReportRow('แหล่งน้ำ', selectedLog.activityLog.water?.source, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'water', 'แหล่งน้ำ'))}
+                            {renderReportRow('ปุ๋ย/ปัจจัยที่ใช้', selectedLog.activityLog.input?.notDone ? 'ไม่ได้ทำ' : selectedLog.activityLog.input?.type ? `${selectedLog.activityLog.input.type} (${selectedLog.activityLog.input.quantity})` : null, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'input', 'ปุ๋ย/ปัจจัยที่ใช้'))}
+                            {renderReportRow('น้ำหมัก/สารทำเอง', selectedLog.activityLog.selfMade?.notDone ? 'ไม่ได้ทำ' : selectedLog.activityLog.selfMade?.formula, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'selfMade', 'น้ำหมัก/สารทำเอง'))}
+                            {renderReportRow('แหล่งน้ำ', selectedLog.activityLog.water?.notDone ? 'ไม่ได้ทำ' : selectedLog.activityLog.water?.source, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'water', 'แหล่งน้ำ'))}
                             
                             <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>แรงงาน</Text>
-                            {renderReportRow('ประเภทแรงงาน', selectedLog.activityLog.worker, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'worker', 'ประเภทแรงงาน'))}
+                            {renderReportRow('ประเภทแรงงาน', selectedLog.activityLog.workerNotDone ? 'ไม่ได้ทำ' : selectedLog.activityLog.worker, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'worker', 'ประเภทแรงงาน'))}
+                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>กิจกรรมเพิ่มเติม</Text>
+                            {renderReportRow('กิจกรรมเพิ่มเติม', selectedLog.activityLog.additionalActivity, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'additionalActivity', 'กิจกรรมเพิ่มเติม'))}
                           </>
                         ) : (
                           <Text style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', marginVertical: 8 }}>ยังไม่มีบันทึกกิจกรรมประจำวัน</Text>
@@ -899,12 +1221,14 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                             {renderReportRow('รายละเอียดกิจกรรม', selectedLog.activityNote, () => confirmDeleteActivityField(selectedLog.id, 'activityNote', 'รายละเอียดกิจกรรม'))}
 
                             <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>ปัจจัยที่ใช้ & แหล่งน้ำ</Text>
-                            {renderReportRow('ปุ๋ย/ปัจจัยที่ใช้', selectedLog.input?.type ? `${selectedLog.input.type} (${selectedLog.input.quantity})` : null, () => confirmDeleteActivityField(selectedLog.id, 'input', 'ปุ๋ย/ปัจจัยที่ใช้'))}
-                            {renderReportRow('น้ำหมัก/สารทำเอง', selectedLog.selfMade?.formula, () => confirmDeleteActivityField(selectedLog.id, 'selfMade', 'น้ำหมัก/สารทำเอง'))}
-                            {renderReportRow('แหล่งน้ำ', selectedLog.water?.source, () => confirmDeleteActivityField(selectedLog.id, 'water', 'แหล่งน้ำ'))}
+                            {renderReportRow('ปุ๋ย/ปัจจัยที่ใช้', selectedLog.input?.notDone ? 'ไม่ได้ทำ' : selectedLog.input?.type ? `${selectedLog.input.type} (${selectedLog.input.quantity})` : null, () => confirmDeleteActivityField(selectedLog.id, 'input', 'ปุ๋ย/ปัจจัยที่ใช้'))}
+                            {renderReportRow('น้ำหมัก/สารทำเอง', selectedLog.selfMade?.notDone ? 'ไม่ได้ทำ' : selectedLog.selfMade?.formula, () => confirmDeleteActivityField(selectedLog.id, 'selfMade', 'น้ำหมัก/สารทำเอง'))}
+                            {renderReportRow('แหล่งน้ำ', selectedLog.water?.notDone ? 'ไม่ได้ทำ' : selectedLog.water?.source, () => confirmDeleteActivityField(selectedLog.id, 'water', 'แหล่งน้ำ'))}
                             
                             <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>แรงงาน</Text>
-                            {renderReportRow('ประเภทแรงงาน', selectedLog.worker, () => confirmDeleteActivityField(selectedLog.id, 'worker', 'ประเภทแรงงาน'))}
+                            {renderReportRow('ประเภทแรงงาน', selectedLog.workerNotDone ? 'ไม่ได้ทำ' : selectedLog.worker, () => confirmDeleteActivityField(selectedLog.id, 'worker', 'ประเภทแรงงาน'))}
+                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>กิจกรรมเพิ่มเติม</Text>
+                            {renderReportRow('กิจกรรมเพิ่มเติม', selectedLog.additionalActivity, () => confirmDeleteActivityField(selectedLog.id, 'additionalActivity', 'กิจกรรมเพิ่มเติม'))}
 
                             {selectedLog.moisture !== undefined && (
                               <>
@@ -935,6 +1259,108 @@ export default function OfficerScreen({ logs, allUsers, onClear, onLogout, onRef
                 onPress={() => setShowReportModal(false)}
               >
                 <Text style={o.bigBtnText}>ปิดหน้าต่าง</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={Boolean(selectedMapFarmer)}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setSelectedMapFarmer(null)}
+        >
+          <View style={o.modalOverlay}>
+            <View style={[o.modalCard, { maxWidth: 480, maxHeight: '85%' }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={o.modalTitle}>📍 ข้อมูลแปลงเกษตรกร</Text>
+                <TouchableOpacity onPress={() => setSelectedMapFarmer(null)}>
+                  <Text style={{ color: '#64748b', fontSize: 20, fontWeight: 'bold' }}>×</Text>
+                </TouchableOpacity>
+              </View>
+
+              {selectedMapFarmer && (
+                <ScrollView style={{ marginTop: 10 }}>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1b5e20' }}>
+                    คุณ{selectedMapFarmer.name}
+                  </Text>
+                  {selectedMapFarmer.isSample ? (
+                    <Text style={o.queueDesc}>รายการตัวอย่าง — ไม่ใช่ข้อมูลเกษตรกรจริง</Text>
+                  ) : (
+                    <>
+                      <Text style={o.queueDesc}>รหัสเกษตรกร: {selectedMapFarmer.id}</Text>
+                      <Text style={o.queueDesc}>เบอร์โทรศัพท์: {selectedMapFarmer.login || '-'}</Text>
+                      <Text style={o.queueDesc}>
+                        อายุ: {selectedMapFarmer.age ?? '-'} ปี (เกิด {selectedMapFarmer.dob || '-'})
+                      </Text>
+                    </>
+                  )}
+
+                  {selectedMapLocation &&
+                  hasValidGpsCoordinates(selectedMapLocation.lat, selectedMapLocation.lng) ? (
+                    <View style={o.mapDetailBox}>
+                      <Text style={o.mapDetailText}>
+                        พิกัด: {selectedMapLocation.lat.toFixed(6)}, {selectedMapLocation.lng.toFixed(6)}
+                      </Text>
+                      {selectedMapFarmer.isSample && (
+                        <Text style={o.mapDetailText}>พิกัดสมมติสำหรับทดสอบ ไม่ใช่ตำแหน่ง GPS จริง</Text>
+                      )}
+                      {Number.isFinite(selectedMapLocation.accuracy) && (
+                        <Text style={o.mapDetailText}>ความคลาดเคลื่อน GPS: ±{Math.round(selectedMapLocation.accuracy)} เมตร</Text>
+                      )}
+                      {selectedMapLocation.plot ? (
+                        <Text style={o.mapDetailText}>แปลง: {selectedMapLocation.plot}</Text>
+                      ) : null}
+                      {selectedMapLocation.capturedAt ? (
+                        <Text style={o.mapDetailText}>
+                          ถ่ายภาพเมื่อ: {new Date(selectedMapLocation.capturedAt).toLocaleString('th-TH')}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : (
+                    <Text style={o.mapNoLocationText}>
+                      ยังไม่มีพิกัดแปลง กรุณาบันทึกรูปถ่ายแปลงขณะเปิด GPS
+                    </Text>
+                  )}
+
+                  <View style={o.mapDetailBox}>
+                    <Text style={o.mapDetailText}>
+                      สถานะลงพื้นที่{selectedMapFarmer.isSample ? ' (ข้อมูลตัวอย่าง)' : ''}:{' '}
+                      {selectedVisit?.visitedAt ? 'ลงพื้นที่แล้ว' : 'ยังไม่ได้ลงพื้นที่'}
+                    </Text>
+                    {selectedVisit?.visitedAt ? (
+                      <>
+                        <Text style={o.mapDetailText}>
+                          วันที่: {new Date(selectedVisit.visitedAt).toLocaleString('th-TH')}
+                        </Text>
+                        <Text style={o.mapDetailText}>เจ้าหน้าที่: {selectedVisit.visitedBy || 'เจ้าหน้าที่'}</Text>
+                      </>
+                    ) : null}
+                  </View>
+                </ScrollView>
+              )}
+
+              <TouchableOpacity
+                style={[
+                  o.bigBtn,
+                  { marginTop: 12, backgroundColor: '#2e7d32', opacity: savingVisit ? 0.6 : 1 },
+                ]}
+                onPress={handleMarkVisited}
+                disabled={savingVisit}
+              >
+                <Text style={o.bigBtnText}>
+                  {savingVisit
+                    ? 'กำลังบันทึก...'
+                    : selectedVisit?.visitedAt
+                      ? 'บันทึกการลงพื้นที่อีกครั้ง'
+                      : 'ทำเครื่องหมายว่าลงพื้นที่แล้ว'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[o.bigBtn, { marginTop: 8, backgroundColor: '#64748b' }]}
+                onPress={() => setSelectedMapFarmer(null)}
+              >
+                <Text style={o.bigBtnText}>ปิด</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -984,8 +1410,13 @@ const o = StyleSheet.create({
   kpiNum: { color: '#1b5e20', fontSize: 18, fontWeight: '900', marginTop: 2 },
   kpiUnit: { fontSize: 10, fontWeight: 'normal', color: '#616161' },
 
-  mapSimContainer: { height: 120, backgroundColor: '#1b5e20', borderRadius: 10, position: 'relative', justifyContent: 'center', alignItems: 'center' },
+  mapSimContainer: { height: 120, backgroundColor: '#1b5e20', borderRadius: 10, position: 'relative', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   mapPin: { position: 'absolute', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  mapLocationNotice: { marginTop: 7, padding: 8, backgroundColor: '#fff8e1', borderRadius: 8 },
+  mapLocationTag: { paddingHorizontal: 7, paddingVertical: 4, backgroundColor: '#ffecb3', borderRadius: 6 },
+  mapDetailBox: { marginTop: 10, padding: 10, backgroundColor: '#f1f8e9', borderRadius: 8 },
+  mapDetailText: { fontSize: 12, color: '#334155', marginTop: 3 },
+  mapNoLocationText: { marginTop: 10, padding: 10, backgroundColor: '#fff8e1', color: '#795548', borderRadius: 8, fontSize: 12 },
 
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   badge: { backgroundColor: '#e8f5e9', color: '#2e7d32', fontSize: 10, fontWeight: 'bold', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },

@@ -8,12 +8,10 @@ import {
   ScrollView,
   SafeAreaView,
   StatusBar,
+  Platform,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
-import { USERS as DEFAULT_USERS } from '../data/users';
-
-const USERS_KEY = 'registered_users';
+import { signIn, signUp } from '../services/localAuthService';
 
 export default function LoginScreen({ onLogin }) {
   // โหมดหน้าจอ: 'signin' หรือ 'signup'
@@ -51,15 +49,58 @@ export default function LoginScreen({ onLogin }) {
     hideDatePicker();
   };
 
-  // ดึงข้อมูลผู้ใช้งานทั้งหมด (Default + ที่สมัครใหม่)
-  const getAllUsers = async () => {
-    try {
-      const stored = await AsyncStorage.getItem(USERS_KEY);
-      const customUsers = stored ? JSON.parse(stored) : [];
-      return [...DEFAULT_USERS, ...customUsers];
-    } catch (e) {
-      return DEFAULT_USERS;
+  const normalizeWebDob = (value) => {
+    const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value.trim());
+    if (!match) return null;
+
+    const first = Number(match[1]);
+    const second = Number(match[2]);
+    const yearBE = Number(match[3]);
+    const year = yearBE - 543;
+    if (year < 1) return null;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const toStoredDob = (day, month) => {
+      const birthDate = new Date(year, month - 1, day);
+      if (
+        birthDate.getFullYear() !== year ||
+        birthDate.getMonth() !== month - 1 ||
+        birthDate.getDate() !== day ||
+        birthDate > today
+      ) {
+        return null;
+      }
+
+      return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${yearBE}`;
+    };
+
+    return toStoredDob(first, second) || toStoredDob(second, first);
+  };
+
+  const getWebDateValue = () => {
+    const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(dob);
+    if (!match) return '';
+
+    const [, day, month, yearBE] = match;
+    return `${Number(yearBE) - 543}-${month}-${day}`;
+  };
+
+  const getMaxWebDate = () => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  };
+
+  const handleWebDateChange = (event) => {
+    const value = event.target.value;
+    if (!value) {
+      setDob('');
+      return;
     }
+
+    const [year, month, day] = value.split('-');
+    setDob(`${day}/${month}/${Number(year) + 543}`);
   };
 
   // จัดการการ Sign In
@@ -69,18 +110,17 @@ export default function LoginScreen({ onLogin }) {
       return;
     }
 
-    const allUsers = await getAllUsers();
-    const found = allUsers.find(
-      (u) => u.login === login.trim() && u.pin === pin
-    );
-
-    if (!found) {
-      setError('เบอร์โทร/รหัสเจ้าหน้าที่ หรือรหัสผ่านไม่ถูกต้อง');
-      return;
+    try {
+      const user = await signIn(login, pin);
+      setError('');
+      onLogin(user);
+    } catch (authError) {
+      setError(
+        authError.code === 'invalid_credentials' || authError.message === 'Invalid login credentials'
+          ? 'เบอร์โทร/รหัสเจ้าหน้าที่ หรือรหัสผ่านไม่ถูกต้อง'
+          : authError.message || 'เข้าสู่ระบบไม่สำเร็จ กรุณาลองอีกครั้ง'
+      );
     }
-
-    setError('');
-    onLogin({ id: found.id, name: found.name, role: found.role });
   };
 
   // จัดการการ Sign Up
@@ -90,33 +130,36 @@ export default function LoginScreen({ onLogin }) {
       return;
     }
 
-    const allUsers = await getAllUsers();
-    const exists = allUsers.some((u) => u.login === phone.trim());
+    let normalizedDob = dob;
+    if (Platform.OS === 'web') {
+      normalizedDob = normalizeWebDob(dob);
+      if (!normalizedDob) {
+        setError('กรุณากรอกวันเกิดเป็น วัน/เดือน/ปี หรือ เดือน/วัน/ปี พ.ศ. และห้ามเป็นวันที่ในอนาคต');
+        return;
+      }
+    }
 
-    if (exists) {
-      setError('เบอร์โทร/รหัสนี้มีอยู่ในระบบแล้ว');
+    if (newPin.length < 6) {
+      setError('รหัสผ่านต้องมีอย่างน้อย 6 หลัก');
       return;
     }
 
-    const newUser = {
-      id: 'usr_' + Date.now().toString(),
-      name: name.trim(),
-      login: phone.trim(),
-      dob: dob,
-      pin: newPin,
-      role: role,
-    };
-
     try {
-      const stored = await AsyncStorage.getItem(USERS_KEY);
-      const customUsers = stored ? JSON.parse(stored) : [];
-      const updatedUsers = [...customUsers, newUser];
-      await AsyncStorage.setItem(USERS_KEY, JSON.stringify(updatedUsers));
-
+      const user = await signUp({
+        name: name.trim(),
+        phone: phone.trim(),
+        dob: normalizedDob,
+        password: newPin,
+        role,
+      });
       setError('');
-      onLogin({ id: newUser.id, name: newUser.name, role: newUser.role });
-    } catch (e) {
-      setError('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+      onLogin(user);
+    } catch (authError) {
+      setError(
+        authError.code === '23505'
+          ? 'เบอร์โทร/รหัสนี้มีอยู่ในระบบแล้ว'
+          : authError.message || 'สมัครสมาชิกไม่สำเร็จ กรุณาลองอีกครั้ง'
+      );
     }
   };
 
@@ -178,7 +221,7 @@ export default function LoginScreen({ onLogin }) {
 
             {/* ส่วนสลับไปหน้า Sign Up */}
             <View style={styles.switchContainer}>
-              <Text style={styles.switchText}>Don't have an account?</Text>
+              <Text style={styles.switchText}>Don&apos;t have an account?</Text>
               <TouchableOpacity style={styles.signUpButton} onPress={toggleMode}>
                 <Text style={styles.signUpButtonText}>Sign Up</Text>
               </TouchableOpacity>
@@ -215,22 +258,46 @@ export default function LoginScreen({ onLogin }) {
 
             {/* ปุ่มกดเลือกวัน/เดือน/ปีเกิด แบบปฏิทิน */}
             <Text style={styles.inputLabel}>Date of Birth (วัน/เดือน/ปีเกิด)</Text>
-            <TouchableOpacity style={styles.datePickerInput} onPress={showDatePicker}>
-              <Text style={[styles.datePickerText, !dob && { color: '#a1a1a1' }]}>
-                {dob ? `📅 ${dob}` : '📅 กดเพื่อเลือกวันเดือนปีเกิด'}
-              </Text>
-            </TouchableOpacity>
+            {Platform.OS === 'web' ? (
+              React.createElement('input', {
+                type: 'date',
+                value: getWebDateValue(),
+                max: getMaxWebDate(),
+                onChange: handleWebDateChange,
+                'aria-label': 'วันเดือนปีเกิด',
+                style: {
+                  width: '100%',
+                  height: 48,
+                  boxSizing: 'border-box',
+                  backgroundColor: '#ffffff',
+                  borderRadius: 24,
+                  padding: '0 20px',
+                  fontSize: 15,
+                  color: '#333333',
+                  marginBottom: 16,
+                  border: 'none',
+                },
+              })
+            ) : (
+              <TouchableOpacity style={styles.datePickerInput} onPress={showDatePicker}>
+                <Text style={[styles.datePickerText, !dob && { color: '#a1a1a1' }]}>
+                  {dob ? `📅 ${dob}` : '📅 กดเพื่อเลือกวันเดือนปีเกิด'}
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {/* Modal ปฏิทินเลือกวันที่ */}
-            <DateTimePickerModal
-              isVisible={isDatePickerVisible}
-              mode="date"
-              onConfirm={handleConfirmDate}
-              onCancel={hideDatePicker}
-              confirmTextIOS="ตกลง"
-              cancelTextIOS="ยกเลิก"
-              maximumDate={new Date()} // ป้องกันเลือกวันที่ในอนาคต
-            />
+            {Platform.OS !== 'web' && (
+              <DateTimePickerModal
+                isVisible={isDatePickerVisible}
+                mode="date"
+                onConfirm={handleConfirmDate}
+                onCancel={hideDatePicker}
+                confirmTextIOS="ตกลง"
+                cancelTextIOS="ยกเลิก"
+                maximumDate={new Date()} // ป้องกันเลือกวันที่ในอนาคต
+              />
+            )}
 
             <Text style={styles.inputLabel}>Password (PIN)</Text>
             <TextInput
@@ -239,7 +306,7 @@ export default function LoginScreen({ onLogin }) {
               onChangeText={setNewPin}
               secureTextEntry
               keyboardType="number-pad"
-              placeholder="รหัสผ่าน 4 หลัก"
+              placeholder="รหัสผ่านอย่างน้อย 6 หลัก"
               placeholderTextColor="#a1a1a1"
             />
 

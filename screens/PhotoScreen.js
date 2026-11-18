@@ -13,6 +13,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { PLOTS } from '../data/options';
+import { notify } from '../utils/notify';
 
 export default function PhotoScreen({ onSave, onClose }) {
   const [plot, setPlot] = useState(null);
@@ -67,16 +68,10 @@ export default function PhotoScreen({ onSave, onClose }) {
       summary: `ถ่ายรูป ${plot}${hasGps ? ' · มีพิกัด GPS' : ' · ไม่มีพิกัด GPS'}`,
     });
 
-    Alert.alert(
+    notify(
       'บันทึกสำเร็จ! ✅',
       hasGps ? 'บันทึกรูปถ่ายพร้อมพิกัด GPS เรียบร้อยแล้ว' : 'บันทึกรูปถ่ายเรียบร้อยแล้ว (ไม่มีพิกัด GPS)',
-      [
-        {
-          text: 'ตกลง',
-          onPress: () => onClose?.(),
-        },
-      ],
-      { cancelable: false }
+      onClose
     );
   };
 
