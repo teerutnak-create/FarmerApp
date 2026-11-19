@@ -95,6 +95,8 @@ if (Platform.OS !== 'web') {
 
 export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout, onRefresh, onSaveLogForFarmer, onUpdateLog, onDeleteLog, onDeleteActivityField }) {
   const [currentPage, setCurrentPage] = useState('home');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [homeTab, setHomeTab] = useState('all'); // 'all' | 'map' | 'farmers'
   const [auditTab, setAuditTab] = useState('gap');
   const [selectedFarmer, setSelectedFarmer] = useState(null);
   const [registeredFarmers, setRegisteredFarmers] = useState([]);
@@ -324,6 +326,15 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
   };
 
   const farmersList = usersForDisplay.filter((u) => u.role === 'farmer');
+  const filteredFarmersList = farmersList.filter((farmer) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      (farmer.name && farmer.name.toLowerCase().includes(q)) ||
+      (farmer.id && farmer.id.toLowerCase().includes(q)) ||
+      (farmer.login && farmer.login.toLowerCase().includes(q))
+    );
+  });
   const latestLocations = { ...farmLocations };
   for (const log of logs || []) {
     if (
@@ -629,59 +640,94 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
 
   return (
     <SafeAreaView style={o.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#72c07b" />
+      <StatusBar barStyle="light-content" backgroundColor="#2e7d32" />
 
       <View style={o.mainLayout}>
-        {/* Header สรุปข้อมูลเจ้าหน้าที่ ด้านบน */}
-        <View style={o.headerCard}>
-          <View style={o.headerTop}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <View style={o.onlineDot} />
-              <Text style={o.headerSubtitle}>FIELD OFFICER SUITE v4.0</Text>
-            </View>
-            <TouchableOpacity onPress={onLogout}>
-              <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: 'bold', textDecorationLine: 'underline' }}>ออกจากระบบ</Text>
-            </TouchableOpacity>
+        {/* 🟢 Top Header Bar */}
+        <View style={o.topHeader}>
+          <View style={o.logoBadge}>
+            <Text style={{ fontSize: 18 }}>🛡️</Text>
           </View>
-
-          <Text style={o.profileName}>เจ้าหน้าที่สมศรี <Text style={o.profileSub}>(OFF-2026-0089)</Text></Text>
-          <Text style={o.profileRole}>ตำแหน่ง: Senior GAP Auditor (Level 2)</Text>
+          <View style={o.searchPill}>
+            <Text style={{ fontSize: 14, marginRight: 6 }}>🔍</Text>
+            <TextInput
+              style={o.searchInput}
+              placeholder="ค้นหาชื่อ, รหัส หรือเบอร์เกษตรกร..."
+              placeholderTextColor="#78909c"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+          </View>
+          <TouchableOpacity style={o.headerIconBtn} onPress={onLogout}>
+            <Text style={{ fontSize: 16 }}>🚪</Text>
+          </TouchableOpacity>
         </View>
 
         {/* หน้าหลัก */}
         {currentPage === 'home' ? (
           <ScrollView contentContainerStyle={o.container} showsVerticalScrollIndicator={false}>
             
-            {/* Dashboard KPI & ปุ่มส่งออก PDF */}
+            {/* 🟢 Hero Banner เจ้าหน้าที่ */}
+            <View style={o.heroBanner}>
+              <View style={o.heroTopRow}>
+                <View style={o.heroTag}>
+                  <Text style={o.heroTagText}>FIELD OFFICER SUITE v4.0</Text>
+                </View>
+                <View style={o.heroTagRight}>
+                  <Text style={o.heroTagText}>● ออนไลน์</Text>
+                </View>
+              </View>
+
+              <Text style={o.heroGreeting}>เจ้าหน้าที่สมศรี (OFF-2026-0089)</Text>
+              <Text style={o.heroSub}>ตำแหน่ง: Senior GAP Auditor (Level 2)</Text>
+
+              <View style={o.heroStatsRow}>
+                <View style={o.heroStatPill}>
+                  <Text style={o.heroStatLabel}>เกษตรกร</Text>
+                  <Text style={o.heroStatVal}>{farmersList.length} คน</Text>
+                </View>
+                <View style={o.heroStatPill}>
+                  <Text style={o.heroStatLabel}>บันทึกรวม</Text>
+                  <Text style={o.heroStatVal}>{logs ? logs.length : 0} รายการ</Text>
+                </View>
+                <View style={o.heroStatPill}>
+                  <Text style={o.heroStatLabel}>พิกัด GPS</Text>
+                  <Text style={o.heroStatVal}>{mapFarmersWithLocations.length} จุด</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* 🟢 เมนูไอคอน 4 คอลัมน์ */}
+            <View style={o.gridCard}>
+              <View style={o.iconGrid}>
+                {[
+                  { key: 'pdf', icon: '📄', label: 'ออก PDF', bg: '#e0f2fe', onPress: handleExportPDF },
+                  { key: 'manage', icon: '⚙️', label: 'จัดการข้อมูล', bg: '#f1f5f9', onPress: () => setShowManageModal(true) },
+                  { key: 'sync', icon: '🔄', label: 'ซิงก์ข้อมูล', bg: '#e8f5e9', onPress: onRefresh },
+                  { key: 'map', icon: '🗺️', label: 'แผนที่ GPS', bg: '#f1f8e9', onPress: () => setHomeTab(homeTab === 'map' ? 'all' : 'map') },
+                ].map((item) => (
+                  <TouchableOpacity key={item.key} style={o.iconGridItem} onPress={item.onPress}>
+                    <View style={[o.iconCircle, { backgroundColor: item.bg }]}>
+                      <Text style={o.iconEmoji}>{item.icon}</Text>
+                    </View>
+                    <Text style={o.iconLabel} numberOfLines={1}>{item.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* 🟢 เส้นคั่นหัวข้อกลาง */}
+            <View style={o.sectionDividerRow}>
+              <View style={o.dividerLine} />
+              <Text style={o.sectionDividerText}>
+                {homeTab === 'map' ? 'แผนที่พิกัดแปลง' : homeTab === 'farmers' ? 'รายชื่อเกษตรกร' : 'ภาพรวมพื้นที่และเกษตรกร'}
+              </Text>
+              <View style={o.dividerLine} />
+            </View>
+
+            {/* 🟢 เริ่มครอบการ์ดแผนที่ */}
+            {(homeTab === 'all' || homeTab === 'map') && (
             <View style={o.sectionCard}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={o.sectionTitle}>📊 Dashboard & แผนที่ GPS พิกัดแปลงตรวจ</Text>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
-                  {/* 🟢 ปุ่มส่งออกข้อมูล PDF */}
-                  <TouchableOpacity onPress={handleExportPDF} style={[o.refreshBtn, { backgroundColor: '#e0f2fe' }]}>
-                    <Text style={{ color: '#0284c7', fontSize: 11, fontWeight: 'bold' }}>📄 ออก PDF</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity onPress={() => setShowManageModal(true)} style={[o.refreshBtn, { backgroundColor: '#f1f5f9' }]}>
-                    <Text style={{ color: '#334155', fontSize: 11, fontWeight: 'bold' }}>⚙️ จัดการข้อมูล</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity onPress={onRefresh} style={o.refreshBtn}>
-                    <Text style={{ color: '#2e7d32', fontSize: 11, fontWeight: 'bold' }}>🔄 ซิงก์ข้อมูล</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={o.kpiGrid}>
-                <View style={o.kpiCard}>
-                  <Text style={o.kpiLabel}>เกษตรกรในระบบ</Text>
-                  <Text style={o.kpiNum}>{farmersList.length} <Text style={o.kpiUnit}>คน</Text></Text>
-                </View>
-                <View style={o.kpiCard}>
-                  <Text style={o.kpiLabel}>บันทึกกิจกรรมรวม</Text>
-                  <Text style={[o.kpiNum, { color: '#2e7d32' }]}>{logs ? logs.length : 0} <Text style={o.kpiUnit}>รายการ</Text></Text>
-                </View>
-              </View>
 
               <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1b5e20', marginTop: 12, marginBottom: 6 }}>
                 🗺️ พิกัดแปลงเกษตรกรในพื้นที่ ต.ผักไหม:
@@ -784,15 +830,17 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
                 </View>
               )}
             </View>
+            )}
 
             {/* รายชื่อเกษตรกร */}
+            {(homeTab === 'all' || homeTab === 'farmers') && (
             <View style={o.sectionCard}>
               <View style={o.cardHeader}>
                 <Text style={o.sectionTitle}>👨‍🌾 รายชื่อเกษตรกร & ความครบถ้วนของข้อมูล</Text>
                 <Text style={o.badge}>{farmersList.length} รายการ</Text>
               </View>
 
-              {farmersList.map((farmer) => {
+              {filteredFarmersList.map((farmer) => {
                 const check = checkFarmerCompleteness(farmer.id);
                 const farmerLogs = logs ? logs.filter((l) => l.farmerId === farmer.id) : [];
                 
@@ -871,6 +919,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
                 );
               })}
             </View>
+            )}
             
           </ScrollView>
         ) : (
@@ -1365,6 +1414,30 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
             </View>
           </View>
         </Modal>
+        {currentPage === 'home' && (
+          <View style={o.bottomNav}>
+            <TouchableOpacity style={o.bottomNavItem} onPress={() => setHomeTab('all')}>
+              <Text style={[o.bottomNavIcon, homeTab === 'all' && o.bottomNavActive]}>🏠</Text>
+              <Text style={[o.bottomNavText, homeTab === 'all' && o.bottomNavTextActive]}>หน้าหลัก</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={o.bottomNavItem} onPress={() => setHomeTab('map')}>
+              <Text style={[o.bottomNavIcon, homeTab === 'map' && o.bottomNavActive]}>🗺️</Text>
+              <Text style={[o.bottomNavText, homeTab === 'map' && o.bottomNavTextActive]}>แผนที่</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={o.bottomNavItem} onPress={() => setHomeTab('farmers')}>
+              <Text style={[o.bottomNavIcon, homeTab === 'farmers' && o.bottomNavActive]}>👨‍🌾</Text>
+              <Text style={[o.bottomNavText, homeTab === 'farmers' && o.bottomNavTextActive]}>เกษตรกร</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={o.bottomNavItem} onPress={() => setShowManageModal(true)}>
+              <Text style={o.bottomNavIcon}>⚙️</Text>
+              <Text style={o.bottomNavText}>จัดการ</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={o.bottomNavItem} onPress={handleExportPDF}>
+              <Text style={o.bottomNavIcon}>📄</Text>
+              <Text style={o.bottomNavText}>ออก PDF</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
       </View>
     </SafeAreaView>
@@ -1478,4 +1551,91 @@ const o = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalCard: { width: '100%', backgroundColor: '#ffffff', borderRadius: 16, padding: 16, elevation: 5 },
   modalTitle: { fontSize: 15, fontWeight: 'bold', color: '#2e7d32' },
+// Top Header Bar
+  topHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2e7d32',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  logoBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 22,
+    paddingHorizontal: 12,
+    height: 38,
+  },
+  searchInput: { flex: 1, fontSize: 13, color: '#1f2937', outlineStyle: 'none' },
+  headerIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // Hero Banner
+  heroBanner: {
+    backgroundColor: '#388e3c',
+    borderRadius: 18,
+    padding: 16,
+    elevation: 3,
+  },
+  heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  heroTag: { backgroundColor: 'rgba(255,255,255,0.22)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  heroTagRight: { backgroundColor: '#1b5e20', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  heroTagText: { color: '#ffffff', fontSize: 10, fontWeight: 'bold' },
+  heroGreeting: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' },
+  heroSub: { color: '#e8f5e9', fontSize: 11, marginTop: 2, marginBottom: 12 },
+  heroStatsRow: { flexDirection: 'row', gap: 8 },
+  heroStatPill: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  heroStatLabel: { color: '#e8f5e9', fontSize: 10 },
+  heroStatVal: { color: '#ffffff', fontSize: 13, fontWeight: 'bold', marginTop: 2 },
+
+  // 4-Column Icon Grid
+  gridCard: { backgroundColor: '#ffffff', borderRadius: 18, paddingVertical: 12, paddingHorizontal: 8, elevation: 2 },
+  iconGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  iconGridItem: { width: '25%', alignItems: 'center', paddingVertical: 6 },
+  iconCircle: { width: 50, height: 50, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
+  iconEmoji: { fontSize: 22 },
+  iconLabel: { fontSize: 11, color: '#374151', fontWeight: '600', textAlign: 'center' },
+
+  // Section Divider
+  sectionDividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 2 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#c8e6c9' },
+  sectionDividerText: { fontSize: 13, fontWeight: 'bold', color: '#2e7d32' },
+
+  // Bottom Navigation Bar
+  bottomNav: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+  },
+  bottomNavItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  bottomNavIcon: { fontSize: 20, opacity: 0.55 },
+  bottomNavActive: { opacity: 1 },
+  bottomNavText: { fontSize: 10, color: '#6b7280', marginTop: 2, fontWeight: '600' },
+  bottomNavTextActive: { color: '#2e7d32', fontWeight: 'bold' },
 });

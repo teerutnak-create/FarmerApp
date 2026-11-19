@@ -19,12 +19,11 @@ import DailyLogScreen from './DailyLogScreen';
 import PhotoScreen from './PhotoScreen';
 import PlotInfoScreen from './PlotInfoScreen';
 import YieldScreen from './YieldScreen';
-import AssistantScreen from './AssistantScreen'; // ➕ เพิ่มใหม่ (จุดที่ 1)
+import AssistantScreen from './AssistantScreen';
 import { USERS as DEFAULT_USERS } from '../data/users';
 
 const HARVEST = 'เกี่ยวข้าวเสร็จแล้ว';
 const DRY_HOURS = 24;
-
 const SESSION_KEYS = ['user', 'token', 'session', 'currentUser'];
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -59,21 +58,20 @@ const calculateAge = (dobString, defaultAge) => {
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
     age--;
   }
-
   return age > 0 ? age : 0;
 };
 
 export default function FarmerScreen({ user, logs, onLog, onLogout }) {
   const [recordMode, setRecordMode] = useState('daily');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [isPlaying, setIsPlaying] = useState(false);
   const videoList = [
-    { id: 1, title: 'วิดีโอสอนบันทึกกิจกรรมประจำวัน', duration: '02:15 นาที', icon: '📝', desc: 'สอนขั้นตอนการกรอกข้อมูลการใส่ปุ๋ย ให้น้ำ และการดูแลพืช' },
-    { id: 2, title: 'วิดีโอสอนถ่ายรูปแปลงนาและแนบ GPS', duration: '01:45 นาที', icon: '📷', desc: 'วิธีเปิดกล้องถ่ายภาพแปลงนาพร้อมปักพิกัด GPS อัตโนมัติ' },
-    { id: 3, title: 'วิดีโอสอนวัดและจดบันทึกค่าความชื้น', duration: '01:30 นาที', icon: '💧', desc: 'การใช้งานเครื่องวัดความชื้นและการกรอกค่าลงระบบ' },
-    { id: 4, title: 'วิดีโอสอนวางแผนการปลูกและสรุปรายปี', duration: '03:10 นาที', icon: '🌾', desc: 'การใช้งานปฏิทินวางแผนพืชรายปีด้วยเสียงและลงสรุปผลผลิต' },
+    { id: 1, title: 'สอนบันทึกกิจกรรมประจำวัน', duration: '02:15 นาที', icon: '📝', desc: 'กรอกข้อมูลการใส่ปุ๋ย ให้น้ำ และการดูแลพืช' },
+    { id: 2, title: 'สอนถ่ายรูปแปลงนา + GPS', duration: '01:45 นาที', icon: '📷', desc: 'เปิดกล้องถ่ายภาพแปลงนาพร้อมปักพิกัดอัตโนมัติ' },
+    { id: 3, title: 'สอนวัดและบันทึกความชื้น', duration: '01:30 นาที', icon: '💧', desc: 'ใช้งานเครื่องวัดความชื้นและกรอกค่าลงระบบ' },
+    { id: 4, title: 'สอนวางแผนปลูกและสรุปรายปี', duration: '03:10 นาที', icon: '🌾', desc: 'ใช้ปฏิทินวางแผนพืชด้วยเสียงและสรุปผลผลิต' },
   ];
   const [activeVideo, setActiveVideo] = useState(videoList[0]);
 
@@ -89,7 +87,7 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
 
   const monthsList = [
     'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม',
   ];
 
   const [moisture, setMoisture] = useState('');
@@ -102,22 +100,17 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
     return () => clearInterval(t);
   }, []);
 
-  // 🟢 Effect ดึงค่าความชื้นแบบ Real-time ทุก 3 วินาที
   useEffect(() => {
     let interval;
     if (isLiveMoisture) {
       fetchLiveMoisture().then((val) => {
         if (val !== null) setMoisture(String(val));
       });
-
       interval = setInterval(async () => {
         const liveValue = await fetchLiveMoisture();
-        if (liveValue !== null) {
-          setMoisture(String(liveValue));
-        }
+        if (liveValue !== null) setMoisture(String(liveValue));
       }, 3000);
     }
-
     return () => clearInterval(interval);
   }, [isLiveMoisture]);
 
@@ -128,18 +121,11 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
         recognition.onresult = null;
         recognition.onerror = null;
         recognition.onend = null;
-        try {
-          recognition.abort();
-        } catch (error) {
-          console.warn('Stop browser speech recognition failed:', error);
-        }
+        try { recognition.abort(); } catch (e) {}
         speechRecognitionRef.current = null;
       }
-
       if (nativeVoiceRef.current) {
-        nativeVoiceRef.current
-          .destroy()
-          .catch((error) => console.warn('Stop native speech recognition failed:', error));
+        nativeVoiceRef.current.destroy().catch(() => {});
         nativeVoiceRef.current = null;
       }
     };
@@ -154,27 +140,20 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
       console.warn('clear session failed', e);
     }
     setShowProfileModal(false);
-    setIsSidebarOpen(true);
     setRecordMode('daily');
     setPage('home');
     if (onLogout) onLogout();
   };
 
-  // 🟢 ฟังก์ชันส่งไปยัง DailyLogScreen แบบเปิดเต็มหน้าจอ
   if (page === 'form') return (
-    <DailyLogScreen 
-      onSave={(type, data) => {
-        if (onLog) onLog(type, data);
-      }} 
-      onClose={back} 
+    <DailyLogScreen
+      onSave={(type, data) => { if (onLog) onLog(type, data); }}
+      onClose={back}
     />
   );
-
   if (page === 'photo') return <PhotoScreen onSave={onLog} onClose={back} />;
   if (page === 'plot') return <PlotInfoScreen onSave={onLog} onClose={back} />;
   if (page === 'yield') return <YieldScreen user={user} onSave={onLog} onClose={back} />;
-
-  // ➕ เพิ่มใหม่ (จุดที่ 2): หน้าผู้ช่วย AI
   if (page === 'assistant')
     return <AssistantScreen user={user} logs={logs} moisture={moisture} onClose={back} />;
 
@@ -220,13 +199,7 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
       recognition.onerror = (event) => {
         setIsListening(false);
         if (event.error !== 'aborted') {
-          const message =
-            event.error === 'not-allowed' || event.error === 'service-not-allowed'
-              ? 'กรุณาอนุญาตให้เบราว์เซอร์ใช้ไมโครโฟน แล้วลองอีกครั้ง'
-              : event.error === 'no-speech'
-                ? 'ไม่ได้ยินเสียงพูด กรุณาลองพูดอีกครั้ง'
-                : `กรุณาลองอีกครั้ง (${event.error})`;
-          Alert.alert('จับเสียงไม่สำเร็จ', message);
+          Alert.alert('จับเสียงไม่สำเร็จ', 'กรุณาอนุญาตไมโครโฟนแล้วลองอีกครั้ง');
         }
       };
       recognition.onend = () => {
@@ -234,13 +207,11 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
         setIsListening(false);
       };
       speechRecognitionRef.current = recognition;
-
       try {
         recognition.start();
       } catch (error) {
         speechRecognitionRef.current = null;
         setIsListening(false);
-        Alert.alert('เริ่มใช้ไมโครโฟนไม่ได้', error.message || 'กรุณาลองอีกครั้ง');
       }
       return;
     }
@@ -248,37 +219,15 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
     try {
       const Voice = require('@react-native-voice/voice').default;
       nativeVoiceRef.current = Voice;
-      Voice.onSpeechResults = (event) => {
-        const transcript = event.value?.[0];
-        if (transcript) setCropName(transcript.trim());
-      };
-      Voice.onSpeechPartialResults = (event) => {
-        const transcript = event.value?.[0];
-        if (transcript) setCropName(transcript.trim());
-      };
+      Voice.onSpeechResults = (e) => { if (e.value?.[0]) setCropName(e.value[0].trim()); };
+      Voice.onSpeechPartialResults = (e) => { if (e.value?.[0]) setCropName(e.value[0].trim()); };
       Voice.onSpeechEnd = () => setIsListening(false);
-      Voice.onSpeechError = (event) => {
-        setIsListening(false);
-        Alert.alert(
-          'จับเสียงไม่สำเร็จ',
-          event.error || 'กรุณาตรวจสอบสิทธิ์ไมโครโฟนและลองพูดอีกครั้ง'
-        );
-      };
-
+      Voice.onSpeechError = () => setIsListening(false);
       const available = await Voice.isAvailable();
-      if (!available) {
-        setIsListening(false);
-        Alert.alert('ไม่พบระบบรู้จำเสียง', 'กรุณาตรวจสอบว่ามีบริการรู้จำเสียงในอุปกรณ์');
-        return;
-      }
-
+      if (!available) { setIsListening(false); return; }
       await Voice.start('th-TH');
     } catch (error) {
       setIsListening(false);
-      Alert.alert(
-        'เริ่มใช้ไมโครโฟนไม่ได้',
-        error.message || 'กรุณาเปิดแอปด้วย Development Build และอนุญาตใช้ไมโครโฟน'
-      );
     }
   };
 
@@ -287,11 +236,7 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
       Alert.alert('แจ้งเตือน', 'กรุณาระบุชื่อพืชที่จะปลูกหรือกดปุ่มพูดด้วยเสียง');
       return;
     }
-    const newPlan = {
-      id: Date.now().toString(),
-      month: selectedMonth,
-      crop: cropName.trim(),
-    };
+    const newPlan = { id: Date.now().toString(), month: selectedMonth, crop: cropName.trim() };
     setCropPlans([...cropPlans, newPlan]);
     onLog('วางแผนการปลูกพืช', { month: selectedMonth, crop: cropName.trim() });
     setCropName('');
@@ -325,441 +270,407 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
   const rawAge = user?.age || defaultUserInfo?.age;
   const displayAge = calculateAge(displayDob, rawAge);
 
+  const filteredVideos = videoList.filter(
+    (v) =>
+      !searchQuery.trim() ||
+      v.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      v.desc.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // เมนูไอคอน 4 คอลัมน์ (สไตล์รูปที่ 4)
+  const quickMenuItems = [
+    { key: 'form', icon: '📝', label: 'บันทึกวันนี้', bg: '#e8f5e9', onPress: () => setPage('form') },
+    { key: 'photo', icon: '📷', label: 'ถ่ายรูป GPS', bg: '#e0f2f1', onPress: () => setPage('photo') },
+    { key: 'assistant', icon: '🤖', label: 'ผู้ช่วย AI', bg: '#f1f8e9', onPress: () => setPage('assistant') },
+    { key: 'plot', icon: '🗺️', label: 'ข้อมูลแปลง', bg: '#e8f5e9', onPress: () => setPage('plot') },
+    { key: 'yield', icon: '📦', label: 'สรุปผลผลิต', bg: '#fffde7', onPress: () => setPage('yield') },
+    { key: 'annual', icon: '🗓️', label: 'แผนรายปี', bg: '#e8f5e9', onPress: () => setRecordMode('annual') },
+    { key: 'community', icon: '👥', label: 'กลุ่มแปลงใหญ่', bg: '#e0f2f1', onPress: () => setRecordMode('community') },
+    { key: 'profile', icon: '👤', label: 'โปรไฟล์ฉัน', bg: '#f1f8e9', onPress: () => setShowProfileModal(true) },
+  ];
+
   return (
     <SafeAreaView style={f.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#72c07b" />
+      <StatusBar barStyle="light-content" backgroundColor="#2e7d32" />
 
-      <View style={f.mainLayout}>
-        {/* Sidebar */}
-        {isSidebarOpen && (
-          <View style={f.sidebar}>
-            <View style={f.sidebarTop}>
-              <TouchableOpacity style={f.avatarTouch} onPress={() => setShowProfileModal(true)}>
-                <View style={f.avatarCircle}>
-                  <Text style={f.avatarText}>{user?.name ? user.name.charAt(0) : 'ก'}</Text>
-                </View>
-                <Text style={f.sidebarUserName} numberOfLines={1}>{user?.name}</Text>
-                <Text style={f.sidebarUserId}>ID: {user?.id}</Text>
-                <Text style={f.profileHint}>👆 กดดูโปรไฟล์</Text>
-              </TouchableOpacity>
+      {/* 🟢 Top Header Bar (สไตล์รูปที่ 4: โลโก้ + ช่องค้นหา + ปุ่มโปรไฟล์/ออก) */}
+      <View style={f.topHeader}>
+        <View style={f.logoBadge}>
+          <Text style={f.logoEmoji}>🌾</Text>
+        </View>
+        <View style={f.searchPill}>
+          <Text style={f.searchIcon}>🔍</Text>
+          <TextInput
+            style={f.searchInput}
+            placeholder="ค้นหาคู่มือหรือเมนู..."
+            placeholderTextColor="#78909c"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+        <TouchableOpacity style={f.headerIconBtn} onPress={handleLogout}>
+          <Text style={f.headerIconText}>🚪</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* เนื้อหาหลัก */}
+      <ScrollView contentContainerStyle={f.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* 🟢 Hero Banner Card (สไตล์แบนเนอร์ด้านบนของรูปที่ 4 ในธีมสีเขียว) */}
+        <View style={f.heroBanner}>
+          <View style={f.heroTopRow}>
+            <View style={f.heroTag}>
+              <Text style={f.heroTagText}>PlangJai เกษตรกร</Text>
             </View>
-
-            <View style={f.sidebarMenu}>
-              <TouchableOpacity
-                style={[f.sidebarTab, recordMode === 'daily' && f.sidebarTabActive]}
-                onPress={() => setRecordMode('daily')}
-              >
-                <Text style={f.sidebarTabIcon}>📅</Text>
-                <Text style={[f.sidebarTabText, recordMode === 'daily' && f.sidebarTabTextActive]}>บันทึกรายวัน</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[f.sidebarTab, recordMode === 'annual' && f.sidebarTabActive]}
-                onPress={() => setRecordMode('annual')}
-              >
-                <Text style={f.sidebarTabIcon}>🗓️</Text>
-                <Text style={[f.sidebarTabText, recordMode === 'annual' && f.sidebarTabTextActive]}>บันทึกรายปี</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[f.sidebarTab, recordMode === 'community' && f.sidebarTabActive]}
-                onPress={() => setRecordMode('community')}
-              >
-                <Text style={f.sidebarTabIcon}>👥</Text>
-                <Text style={[f.sidebarTabText, recordMode === 'community' && f.sidebarTabTextActive]}>แดชบอร์ดกลุ่ม</Text>
-              </TouchableOpacity>
-
-              {/* ➕ เพิ่มใหม่ (จุดที่ 3): ปุ่มผู้ช่วย AI */}
-              <TouchableOpacity style={f.sidebarTab} onPress={() => setPage('assistant')}>
-                <Text style={f.sidebarTabIcon}>🤖</Text>
-                <Text style={f.sidebarTabText}>ผู้ช่วย AI</Text>
-              </TouchableOpacity>
+            <View style={f.heroTagRight}>
+              <Text style={f.heroTagText}>GAP ผ่านรับรอง ✓</Text>
             </View>
-
-            <TouchableOpacity style={f.logoutBtn} onPress={handleLogout}>
-              <Text style={f.logoutText}>ออกจากระบบ</Text>
-            </TouchableOpacity>
           </View>
-        )}
 
-        {/* Content Right */}
-        <ScrollView contentContainerStyle={f.contentContainer} showsVerticalScrollIndicator={false}>
-          <View style={f.bannerCard}>
-            <TouchableOpacity
-              style={f.toggleSidebarBtn}
-              onPress={() => setIsSidebarOpen(!isSidebarOpen)}
-            >
-              <Text style={f.toggleSidebarIcon}>{isSidebarOpen ? '◀' : '☰'}</Text>
-            </TouchableOpacity>
-
-            <View style={{ flex: 1, marginLeft: 8 }}>
-              <Text style={f.bannerTitle}>🌾 ระบบจัดการเกษตรกร</Text>
-              <Text style={f.bannerLoc}>📍 กลุ่มวิสาหกิจชุมชน ต.ผักไหม</Text>
+          <View style={f.heroBody}>
+            <View style={{ flex: 1 }}>
+              <Text style={f.heroGreeting}>สวัสดี, คุณ{user?.name || 'เกษตรกร'}</Text>
+              <Text style={f.heroSub}>📍 กลุ่มวิสาหกิจชุมชน ต.ผักไหม • ID: {user?.id}</Text>
             </View>
-
-            <TouchableOpacity style={f.statusBadge} onPress={() => setShowProfileModal(true)}>
-              <View style={f.greenDot} />
-              <Text style={f.statusText}>โปรไฟล์</Text>
+            <TouchableOpacity style={f.heroAvatar} onPress={() => setShowProfileModal(true)}>
+              <Text style={f.heroAvatarText}>{user?.name ? user.name.charAt(0) : 'ก'}</Text>
             </TouchableOpacity>
           </View>
 
-          {recordMode === 'community' ? (
-            <>
-              <View style={f.sectionCard}>
-                <Text style={f.sectionTitle}>👥 ภาพรวมกลุ่มเกษตรกรแปลงใหญ่ ต.ผักไหม</Text>
-                <View style={f.communityGrid}>
-                  <View style={[f.communityStatBox, { backgroundColor: '#e8f5e9' }]}>
-                    <Text style={f.communityStatIcon}>🌾</Text>
-                    <Text style={f.communityStatNum}>125 ไร่</Text>
-                    <Text style={f.communityStatLabel}>พื้นที่ปลูกรวมกลุ่ม</Text>
-                  </View>
+          <View style={f.heroStatsRow}>
+            <View style={f.heroStatPill}>
+              <Text style={f.heroStatLabel}>จำนวนแปลง</Text>
+              <Text style={f.heroStatVal}>2 แปลง (5 ไร่)</Text>
+            </View>
+            <View style={f.heroStatPill}>
+              <Text style={f.heroStatLabel}>ความชื้นสด</Text>
+              <Text style={f.heroStatVal}>{moisture ? `${moisture}%` : '-- %'}</Text>
+            </View>
+            <View style={f.heroStatPill}>
+              <Text style={f.heroStatLabel}>บันทึกแล้ว</Text>
+              <Text style={f.heroStatVal}>{logs?.length || 0} รายการ</Text>
+            </View>
+          </View>
+        </View>
 
-                  <View style={[f.communityStatBox, { backgroundColor: '#f1f8e9' }]}>
-                    <Text style={f.communityStatIcon}>👨‍🌾</Text>
-                    <Text style={f.communityStatNum}>24 ราย</Text>
-                    <Text style={f.communityStatLabel}>สมาชิกในกลุ่ม</Text>
-                  </View>
+        {timerBox}
 
-                  <View style={[f.communityStatBox, { backgroundColor: '#fffde7' }]}>
-                    <Text style={f.communityStatIcon}>📦</Text>
-                    <Text style={f.communityStatNum}>68 ตัน</Text>
-                    <Text style={f.communityStatLabel}>คาดการณ์ผลผลิต</Text>
-                  </View>
+        {/* 🟢 4-Column Icon Grid Menu (สไตล์เมนู 8 ไอคอนในรูปที่ 4) */}
+        <View style={f.gridCard}>
+          <View style={f.iconGrid}>
+            {quickMenuItems.map((item) => (
+              <TouchableOpacity key={item.key} style={f.iconGridItem} onPress={item.onPress}>
+                <View style={[f.iconCircle, { backgroundColor: item.bg }]}>
+                  <Text style={f.iconEmoji}>{item.icon}</Text>
                 </View>
-              </View>
+                <Text style={f.iconLabel} numberOfLines={2}>{item.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
 
-              <View style={f.sectionCard}>
-                <Text style={f.sectionTitle}>💰 ราคารับซื้อข้าวเปลือกหอมมะลิ (วันนี้)</Text>
-                <Text style={f.priceUpdated}>อัปเดตล่าสุด 18 พ.ย. 2569 • ข้อมูลตัวอย่าง</Text>
-                <View style={f.priceRow}>
-                  <View style={f.priceCard}>
-                    <Text style={f.priceLabel}>ข้าวเปลือกแห้ง (ชื้นไม่เกิน 15%)</Text>
-                    <Text style={f.priceValue}>15,200 <Text style={f.priceUnit}>บาท/ตัน</Text></Text>
-                  </View>
-                  <View style={f.priceCard}>
-                    <Text style={f.priceLabel}>ข้าวเปลือกเกี่ยวสด (ชื้น 25%)</Text>
-                    <Text style={f.priceValue}>12,800 <Text style={f.priceUnit}>บาท/ตัน</Text></Text>
-                  </View>
-                </View>
-                <TouchableOpacity style={f.aiPriceButton} onPress={() => setPage('assistant')}>
-                  <Text style={f.aiPriceButtonText}>🤖 ถาม AI วิธีลดความชื้นข้าว</Text>
+        {/* 🟢 เส้นคั่นหัวข้อกลาง (สไตล์ "— สินค้าแนะนำ —" ในรูปที่ 4) */}
+        <View style={f.sectionDividerRow}>
+          <View style={f.dividerLine} />
+          <Text style={f.sectionDividerText}>
+            {recordMode === 'daily'
+              ? 'บริการประจำวัน'
+              : recordMode === 'annual'
+                ? 'แผนการปลูกและรายปี'
+                : 'ภาพรวมกลุ่มแปลงใหญ่'}
+          </Text>
+          <View style={f.dividerLine} />
+        </View>
+
+        {/* เนื้อหาตามแท็บที่เลือก */}
+        {recordMode === 'daily' && (
+          <>
+            {/* การ์ดวัดความชื้น Real-time */}
+            <View style={f.card}>
+              <View style={f.cardHeaderRow}>
+                <Text style={f.cardTitle}>💧 วัดและบันทึกความชื้นข้าวเปลือก</Text>
+                <TouchableOpacity
+                  style={f.liveBadge}
+                  onPress={() => setIsLiveMoisture(!isLiveMoisture)}
+                >
+                  <View style={[f.liveDot, { backgroundColor: isLiveMoisture ? '#22c55e' : '#ef4444' }]} />
+                  <Text style={f.liveBadgeText}>{isLiveMoisture ? 'เรียลไทม์' : 'พิมพ์เอง'}</Text>
                 </TouchableOpacity>
               </View>
 
-              <View style={f.sectionCard}>
-                <Text style={f.sectionTitle}>🌤️ พยากรณ์อากาศและคำแนะนำการทำนา • ต.ผักไหม</Text>
-                <View style={f.weatherSummary}>
-                  <View>
-                    <Text style={f.weatherCaption}>อุณหภูมิโดยประมาณ</Text>
-                    <Text style={f.weatherTemperature}>☀️ 29°C</Text>
-                  </View>
-                  <View style={f.weatherAdvice}>
-                    <Text style={f.weatherAdviceTitle}>คำแนะนำ</Text>
-                    <Text style={f.weatherAdviceText}>เหมาะแก่การตากข้าว</Text>
-                  </View>
-                </View>
-                <Text style={f.sampleNote}>พยากรณ์ตัวอย่าง 3 วันข้างหน้า</Text>
-                <View style={f.forecastRow}>
-                  {[
-                    { day: 'พฤ. 19 พ.ย.', temperature: '31° / 22°', rain: 'ฝน 10%' },
-                    { day: 'ศ. 20 พ.ย.', temperature: '30° / 22°', rain: 'ฝน 35%' },
-                    { day: 'ส. 21 พ.ย.', temperature: '29° / 21°', rain: 'ฝน 60%' },
-                  ].map((forecast) => (
-                    <View key={forecast.day} style={f.forecastDay}>
-                      <Text style={f.forecastDayTitle}>{forecast.day}</Text>
-                      <Text style={f.forecastTemperature}>{forecast.temperature}</Text>
-                      <Text style={f.forecastRain}>{forecast.rain}</Text>
-                    </View>
-                  ))}
-                </View>
-                <Text style={f.weatherFootnote}>ช่วงปลายสัปดาห์ควรระวังฝนก่อนตากหรือเก็บเกี่ยว</Text>
-              </View>
-
-              <View style={f.sectionCard}>
-                <Text style={f.sectionTitle}>🗓️ ปฏิทินรอบการผลิตของกลุ่ม</Text>
-                <Text style={f.sampleNote}>สถานะตัวอย่างของสมาชิกส่วนใหญ่</Text>
-                <View style={f.productionStageRow}>
-                  {['เตรียมดิน', 'หว่าน', 'บำรุง', 'เก็บเกี่ยว'].map((stage, index) => (
-                    <View
-                      key={stage}
-                      style={[
-                        f.productionStage,
-                        index < 2 && f.productionStageComplete,
-                        index === 2 && f.productionStageCurrent,
-                      ]}
-                    >
-                      <Text style={[
-                        f.productionStageNumber,
-                        index < 2 && f.productionStageNumberComplete,
-                        index === 2 && f.productionStageNumberCurrent,
-                      ]}>
-                        {index < 2 ? '✓' : index + 1}
-                      </Text>
-                      <Text style={[
-                        f.productionStageLabel,
-                        index === 2 && f.productionStageLabelCurrent,
-                      ]}>
-                        {stage}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-                <Text style={f.currentStageText}>ช่วงปัจจุบัน: บำรุงต้นข้าว</Text>
-              </View>
-
-              <View style={f.sectionCard}>
-                <Text style={f.sectionTitle}>📊 ภาพรวมการบันทึกและต้นทุน</Text>
-                <View style={f.communityGrid}>
-                  <View style={[f.communityStatBox, { backgroundColor: '#f1f8e9' }]}>
-                    <Text style={f.communityStatIcon}>📝</Text>
-                    <Text style={f.communityStatNum}>18/24 ราย</Text>
-                    <Text style={f.communityStatLabel}>สมาชิกบันทึกข้อมูลแล้ว</Text>
-                  </View>
-                  <View style={[f.communityStatBox, { backgroundColor: '#fffde7' }]}>
-                    <Text style={f.communityStatIcon}>💵</Text>
-                    <Text style={f.communityStatNum}>1,250 บาท/ไร่</Text>
-                    <Text style={f.communityStatLabel}>ต้นทุนเฉลี่ยต่อไร่</Text>
-                  </View>
-                </View>
-                <Text style={f.sampleNote}>ข้อมูลตัวอย่างกลุ่ม</Text>
-              </View>
-
-              <View style={f.sectionCard}>
-                <Text style={f.sectionTitle}>📣 ประกาศและนัดหมายจากกลุ่ม</Text>
-                <View style={f.announcementCard}>
-                  <Text style={f.announcementMeta}>ประกาศตัวอย่างจากประธานกลุ่ม • 17 พ.ย. 2569</Text>
-                  <Text style={f.announcementTitle}>นัดสมาชิกนำตัวอย่างข้าวมาตรวจความชื้น</Text>
-                  <Text style={f.announcementText}>วันศุกร์ เวลา 09.00 น. ณ ศาลากลุ่ม ก่อนวางแผนจำหน่ายผลผลิต</Text>
-                </View>
-              </View>
-            </>
-          ) : recordMode === 'daily' ? (
-            <>
-              <View style={f.statusCard}>
-                <Text style={f.sectionTitle}>📊 สถานะการประเมินและแปลงปลูก</Text>
-                <View style={f.statusGrid}>
-                  <View style={f.statusBox}>
-                    <Text style={f.statusBoxLabel}>มาตรฐาน GAP</Text>
-                    <Text style={[f.statusBoxValue, { color: '#2e7d32' }]}>ผ่านรับรอง</Text>
-                    <Text style={f.statusBoxSub}>หมดอายุ: 12/2026</Text>
-                  </View>
-                  <View style={f.statusBox}>
-                    <Text style={f.statusBoxLabel}>จำนวนแปลง</Text>
-                    <Text style={[f.statusBoxValue, { color: '#388e3c' }]}>2 แปลง</Text>
-                    <Text style={f.statusBoxSub}>พื้นที่รวม 5 ไร่</Text>
-                  </View>
-                </View>
-              </View>
-
-              {timerBox}
-
-              <View style={f.sectionCard}>
-                <Text style={f.sectionTitle}>📝 เมนูบันทึกกิจกรรมประจำวัน</Text>
-                <View style={f.grid}>
-                  <TouchableOpacity style={[f.gridBtn, { backgroundColor: '#4caf50' }]} onPress={() => setPage('form')}>
-                    <Text style={f.gridIcon}>📝</Text>
-                    <Text style={f.gridTitle}>บันทึกกิจกรรมวันนี้</Text>
-                    <Text style={f.gridSub}>ใส่ปุ๋ย ให้น้ำ มีปฏิทินและสั่งงานด้วยเสียง</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity style={[f.gridBtn, { backgroundColor: '#388e3c' }]} onPress={() => setPage('photo')}>
-                    <Text style={f.gridIcon}>📷</Text>
-                    <Text style={f.gridTitle}>ถ่ายรูปแปลงนา</Text>
-                    <Text style={f.gridSub}>แนบรูปพร้อมพิกัด GPS</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={f.sectionCard}>
-                <Text style={f.sectionTitle}>🎥 วิดีโอสอนวิธีใช้งานตามฟังก์ชัน</Text>
-
-                <View style={f.videoWrapper}>
-                  <View style={f.videoPlayerContainer}>
-                    <Text style={{ fontSize: 32 }}>🎬</Text>
-                    <Text style={f.videoPlayingTitle} numberOfLines={2}>{activeVideo.title}</Text>
-                    <Text style={f.videoPlayingDuration}>⏱️ ความยาว: {activeVideo.duration}</Text>
-                    <Text style={f.videoDescText}>{activeVideo.desc}</Text>
-
-                    <TouchableOpacity style={f.playBtn} onPress={() => setIsPlaying(!isPlaying)}>
-                      <Text style={f.playBtnText}>{isPlaying ? '⏸️ หยุดเล่นวิดีโอ' : '▶️ เล่นวิดีโอ'}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#2e7d32', marginTop: 12, marginBottom: 6 }}>
-                  เลือกคู่มือของฟังก์ชันที่คุณต้องการดู:
-                </Text>
-
-                <View style={{ gap: 6 }}>
-                  {videoList.map((item) => {
-                    const isSelected = activeVideo.id === item.id;
-                    return (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={[f.videoItem, isSelected && f.videoItemActive]}
-                        onPress={() => handleSelectVideo(item)}
-                      >
-                        <Text style={{ fontSize: 20, marginRight: 8 }}>{item.icon}</Text>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[f.videoItemTitle, isSelected && { color: '#2e7d32' }]}>{item.title}</Text>
-                          <Text style={f.videoItemSub}>{item.desc}</Text>
-                        </View>
-                        <View style={f.selectBadge}>
-                          <Text style={{ fontSize: 10, color: isSelected ? '#ffffff' : '#2e7d32', fontWeight: 'bold' }}>
-                            {isSelected && isPlaying ? '▶️ เล่นอยู่' : 'เลือกดู'}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* 🟢 การ์ดวัดความชื้น Real-time */}
-              <View style={f.sectionCard}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <Text style={f.sectionTitle}>💧 วัดและบันทึกความชื้นข้าวเปลือก</Text>
-                  
-                  <TouchableOpacity 
-                    style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0fdf4', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#bbf7d0' }}
-                    onPress={() => setIsLiveMoisture(!isLiveMoisture)}
-                  >
-                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isLiveMoisture ? '#22c55e' : '#ef4444', marginRight: 6 }} />
-                    <Text style={{ fontSize: 10, color: '#166534', fontWeight: 'bold' }}>
-                      {isLiveMoisture ? '● เรียลไทม์' : '○ พิมพ์เอง'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <Text style={s.label}>ค่าความชื้นจากเซนเซอร์ปัจจุบัน (%)</Text>
+              <Text style={f.inputCaption}>ค่าความชื้นจากเซนเซอร์ปัจจุบัน (%)</Text>
+              <View style={f.moistureRow}>
                 <TextInput
-                  style={[s.input, f.customInput, { fontWeight: 'bold', color: '#1b5e20', fontSize: 15 }]}
+                  style={[f.customInput, { flex: 1, fontWeight: 'bold', color: '#1b5e20', fontSize: 16 }]}
                   value={moisture}
                   onChangeText={(val) => {
                     setMoisture(val);
                     setIsLiveMoisture(false);
                   }}
                   keyboardType="numeric"
-                  placeholder="กำลังดึงข้อมูลจากเซนเซอร์..."
-                  placeholderTextColor="#a1a1a1"
+                  placeholder="กำลังดึงข้อมูล..."
+                  placeholderTextColor="#9ca3af"
                 />
-                <TouchableOpacity style={[s.bigBtn, { backgroundColor: '#2e7d32', marginTop: 10 }]} onPress={saveMoisture}>
-                  <Text style={s.bigBtnText}>💾 บันทึกค่าความชื้น</Text>
+                <TouchableOpacity style={f.saveMoistureBtn} onPress={saveMoisture}>
+                  <Text style={f.saveMoistureText}>💾 บันทึก</Text>
                 </TouchableOpacity>
               </View>
-            </>
-          ) : (
-            <>
-              <View style={f.sectionCard}>
-                <Text style={f.sectionTitle}>🌱 วางแผนงานการปลูกพืชประจำปี (Voice Support)</Text>
-                <Text style={{ fontSize: 11, color: '#666', marginBottom: 8 }}>
-                  เลือกเดือนและกรอกชื่อพืชที่ตั้งใจจะปลูก หรือกดปุ่มพูดด้วยเสียง
-                </Text>
+            </View>
 
-                <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#2e7d32', marginBottom: 4 }}>
-                  1. เลือกเดือนที่จะปลูก:
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
-                    {monthsList.map((m) => (
-                      <TouchableOpacity
-                        key={m}
-                        style={[
-                          f.monthChip,
-                          selectedMonth === m && f.monthChipActive,
-                        ]}
-                        onPress={() => setSelectedMonth(m)}
-                      >
-                        <Text style={[f.monthChipText, selectedMonth === m && { color: '#fff' }]}>
-                          {m}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </ScrollView>
+            {/* วิดีโอคู่มือการใช้งาน */}
+            <View style={f.card}>
+              <Text style={f.cardTitle}>🎥 วิดีโอสอนวิธีใช้งาน</Text>
 
-                <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#2e7d32', marginBottom: 4 }}>
-                  2. ระบุชื่อพืชที่จะปลูก:
-                </Text>
-                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                  <TextInput
-                    style={[f.customInput, { flex: 1 }]}
-                    placeholder="พิมพ์ชื่อพืช เช่น ข้าวหอมมะลิ..."
-                    value={cropName}
-                    onChangeText={setCropName}
-                    placeholderTextColor="#a1a1a1"
-                  />
-
-                  <TouchableOpacity
-                    style={[
-                      f.voiceBtn,
-                      isListening && { backgroundColor: '#dc2626' },
-                    ]}
-                    onPress={handleVoiceRecordAnnual}
-                    disabled={isListening}
-                  >
-                    <Text style={f.voiceBtnText}>
-                      {isListening ? '🎙️ ฟังอยู่...' : '🎙️ พูด'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <TouchableOpacity
-                  style={[s.bigBtn, { backgroundColor: '#2e7d32', marginTop: 12 }]}
-                  onPress={handleAddCropPlan}
-                >
-                  <Text style={s.bigBtnText}>➕ บันทึกแผนการปลูกลงปฏิทิน</Text>
+              <View style={f.videoPlayerBox}>
+                <Text style={{ fontSize: 32 }}>🎬</Text>
+                <Text style={f.videoPlayingTitle}>{activeVideo.title}</Text>
+                <Text style={f.videoPlayingSub}>⏱️ {activeVideo.duration} • {activeVideo.desc}</Text>
+                <TouchableOpacity style={f.playBtn} onPress={() => setIsPlaying(!isPlaying)}>
+                  <Text style={f.playBtnText}>{isPlaying ? '⏸️ หยุดเล่น' : '▶️ เล่นวิดีโอ'}</Text>
                 </TouchableOpacity>
               </View>
 
-              <View style={f.sectionCard}>
-                <Text style={f.sectionTitle}>📅 ปฏิทินแผนงานการปลูกพืชในปีนี้</Text>
-
-                {cropPlans.length === 0 ? (
-                  <Text style={{ fontSize: 11, color: '#888', fontStyle: 'italic', textAlign: 'center', marginVertical: 12 }}>
-                    ยังไม่มีรายการแผนการปลูก เพิ่มรายการด้านบนได้เลย
-                  </Text>
-                ) : (
-                  <View style={{ gap: 8 }}>
-                    {cropPlans.map((plan) => (
-                      <View key={plan.id} style={f.planCardItem}>
-                        <View style={f.planMonthBadge}>
-                          <Text style={f.planMonthText}>{plan.month}</Text>
-                        </View>
-
-                        <View style={{ flex: 1, marginLeft: 8 }}>
-                          <Text style={f.planCropName}>🌱 {plan.crop}</Text>
-                          <Text style={f.planStatusText}>สถานะ: วางแผนแล้ว</Text>
-                        </View>
-
-                        <TouchableOpacity onPress={() => handleDeletePlan(plan.id)}>
-                          <Text style={{ fontSize: 16 }}>🗑️</Text>
-                        </TouchableOpacity>
+              <View style={f.videoGrid}>
+                {filteredVideos.map((item) => {
+                  const isSelected = activeVideo.id === item.id;
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[f.videoMiniCard, isSelected && f.videoMiniCardActive]}
+                      onPress={() => handleSelectVideo(item)}
+                    >
+                      <View style={f.videoMiniTop}>
+                        <Text style={{ fontSize: 22 }}>{item.icon}</Text>
+                        <Text style={f.videoMiniDur}>{item.duration}</Text>
                       </View>
-                    ))}
-                  </View>
-                )}
+                      <Text style={f.videoMiniTitle} numberOfLines={2}>{item.title}</Text>
+                      <Text style={f.videoMiniDesc} numberOfLines={2}>{item.desc}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          </>
+        )}
+
+        {recordMode === 'annual' && (
+          <>
+            <View style={f.card}>
+              <Text style={f.cardTitle}>🌱 วางแผนการปลูกพืชประจำปี (รองรับเสียง)</Text>
+              <Text style={f.inputCaption}>1. เลือกเดือนที่จะปลูก</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {monthsList.map((m) => (
+                    <TouchableOpacity
+                      key={m}
+                      style={[f.monthChip, selectedMonth === m && f.monthChipActive]}
+                      onPress={() => setSelectedMonth(m)}
+                    >
+                      <Text style={[f.monthChipText, selectedMonth === m && { color: '#fff' }]}>{m}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+
+              <Text style={f.inputCaption}>2. ระบุชื่อพืชที่จะปลูก</Text>
+              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                <TextInput
+                  style={[f.customInput, { flex: 1 }]}
+                  placeholder="พิมพ์ชื่อพืช เช่น ข้าวหอมมะลิ..."
+                  value={cropName}
+                  onChangeText={setCropName}
+                  placeholderTextColor="#9ca3af"
+                />
+                <TouchableOpacity
+                  style={[f.voiceBtn, isListening && { backgroundColor: '#dc2626' }]}
+                  onPress={handleVoiceRecordAnnual}
+                  disabled={isListening}
+                >
+                  <Text style={f.voiceBtnText}>{isListening ? '🎙️ ฟังอยู่' : '🎙️ พูด'}</Text>
+                </TouchableOpacity>
               </View>
 
-              <View style={f.sectionCard}>
-                <Text style={f.sectionTitle}>🗓️ บันทึกแปลงและสรุปผลผลิตรายปี</Text>
-                <View style={f.grid}>
-                  <TouchableOpacity style={[f.gridBtn, { backgroundColor: '#4caf50', width: '100%' }]} onPress={() => setPage('plot')}>
-                    <Text style={f.gridIcon}>🗺️</Text>
-                    <Text style={f.gridTitle}>ข้อมูลแปลงและใบรับรองมาตรฐานประจำปี</Text>
-                    <Text style={f.gridSub}>ปรับปรุงขนาดแปลง ชนิดดิน ประวัติสารเคมี และใบรับรอง GAP</Text>
-                  </TouchableOpacity>
+              <TouchableOpacity style={f.primaryFullBtn} onPress={handleAddCropPlan}>
+                <Text style={f.primaryFullBtnText}>➕ บันทึกแผนการปลูกลงปฏิทิน</Text>
+              </TouchableOpacity>
+            </View>
 
-                  <TouchableOpacity style={[f.gridBtn, { backgroundColor: '#388e3c', width: '100%', marginTop: 8 }]} onPress={() => setPage('yield')}>
-                    <Text style={f.gridIcon}>📦</Text>
-                    <Text style={f.gridTitle}>สรุปบันทึกผลผลิตรายปี/ฤดูกาล</Text>
-                    <Text style={f.gridSub}>บันทึกปริมาณผลผลิตข้าวรวม และออกเลขล็อตประจำปี</Text>
-                  </TouchableOpacity>
+            <View style={f.card}>
+              <Text style={f.cardTitle}>📅 ปฏิทินแผนงานในปีนี้</Text>
+              {cropPlans.length === 0 ? (
+                <Text style={f.emptyText}>ยังไม่มีรายการแผนการปลูก</Text>
+              ) : (
+                <View style={{ gap: 8 }}>
+                  {cropPlans.map((plan) => (
+                    <View key={plan.id} style={f.planCardItem}>
+                      <View style={f.planMonthBadge}>
+                        <Text style={f.planMonthText}>{plan.month}</Text>
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={f.planCropName}>🌱 {plan.crop}</Text>
+                        <Text style={f.planStatusText}>สถานะ: วางแผนแล้ว</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => handleDeletePlan(plan.id)}>
+                        <Text style={{ fontSize: 16 }}>🗑️</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          </>
+        )}
+
+        {recordMode === 'community' && (
+          <>
+            <View style={f.card}>
+              <Text style={f.cardTitle}>👥 ภาพรวมกลุ่มเกษตรกรแปลงใหญ่ ต.ผักไหม</Text>
+              <View style={f.communityGrid}>
+                <View style={f.communityStatBox}>
+                  <Text style={f.communityStatIcon}>🌾</Text>
+                  <Text style={f.communityStatNum}>125 ไร่</Text>
+                  <Text style={f.communityStatLabel}>พื้นที่ปลูกรวม</Text>
+                </View>
+                <View style={f.communityStatBox}>
+                  <Text style={f.communityStatIcon}>👨‍🌾</Text>
+                  <Text style={f.communityStatNum}>24 ราย</Text>
+                  <Text style={f.communityStatLabel}>สมาชิกกลุ่ม</Text>
+                </View>
+                <View style={f.communityStatBox}>
+                  <Text style={f.communityStatIcon}>📦</Text>
+                  <Text style={f.communityStatNum}>68 ตัน</Text>
+                  <Text style={f.communityStatLabel}>คาดการณ์ผลผลิต</Text>
                 </View>
               </View>
-            </>
-          )}
-        </ScrollView>
+            </View>
+
+            <View style={f.card}>
+              <Text style={f.cardTitle}>💰 ราคารับซื้อข้าวเปลือกหอมมะลิ (วันนี้)</Text>
+              <View style={f.priceRow}>
+                <View style={f.priceCard}>
+                  <Text style={f.priceLabel}>ข้าวเปลือกแห้ง (ชื้น ≤ 15%)</Text>
+                  <Text style={f.priceValue}>15,200 <Text style={f.priceUnit}>บาท/ตัน</Text></Text>
+                </View>
+                <View style={f.priceCard}>
+                  <Text style={f.priceLabel}>ข้าวเปลือกเกี่ยวสด (ชื้น 25%)</Text>
+                  <Text style={f.priceValue}>12,800 <Text style={f.priceUnit}>บาท/ตัน</Text></Text>
+                </View>
+              </View>
+              <TouchableOpacity style={f.aiPriceButton} onPress={() => setPage('assistant')}>
+                <Text style={f.aiPriceButtonText}>🤖 ถาม AI วิธีลดความชื้นข้าว</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={f.card}>
+              <Text style={f.cardTitle}>🌤️ พยากรณ์อากาศ • ต.ผักไหม</Text>
+              <View style={f.weatherSummary}>
+                <View>
+                  <Text style={f.weatherCaption}>อุณหภูมิโดยประมาณ</Text>
+                  <Text style={f.weatherTemperature}>☀️ 29°C</Text>
+                </View>
+                <View style={f.weatherAdvice}>
+                  <Text style={f.weatherAdviceTitle}>คำแนะนำ</Text>
+                  <Text style={f.weatherAdviceText}>เหมาะแก่การตากข้าว</Text>
+                </View>
+              </View>
+              <View style={f.forecastRow}>
+                {[
+                  { day: 'พฤ. 19 พ.ย.', temperature: '31° / 22°', rain: 'ฝน 10%' },
+                  { day: 'ศ. 20 พ.ย.', temperature: '30° / 22°', rain: 'ฝน 35%' },
+                  { day: 'ส. 21 พ.ย.', temperature: '29° / 21°', rain: 'ฝน 60%' },
+                ].map((fc) => (
+                  <View key={fc.day} style={f.forecastDay}>
+                    <Text style={f.forecastDayTitle}>{fc.day}</Text>
+                    <Text style={f.forecastTemperature}>{fc.temperature}</Text>
+                    <Text style={f.forecastRain}>{fc.rain}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View style={f.card}>
+              <Text style={f.cardTitle}>🗓️ ปฏิทินรอบการผลิตของกลุ่ม</Text>
+              <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                {['เตรียมดิน', 'หว่าน', 'บำรุง', 'เก็บเกี่ยว'].map((stage, index) => (
+                  <View
+                    key={stage}
+                    style={{
+                      flex: 1,
+                      alignItems: 'center',
+                      paddingVertical: 8,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      backgroundColor: index === 2 ? '#2e7d32' : index < 2 ? '#e8f5e9' : '#f9fafb',
+                      borderColor: index === 2 ? '#2e7d32' : index < 2 ? '#c8e6c9' : '#e5e7eb',
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: index === 2 ? '#fff' : index < 2 ? '#2e7d32' : '#6b7280' }}>
+                      {index < 2 ? '✓' : index + 1}
+                    </Text>
+                    <Text style={{ fontSize: 10, marginTop: 2, fontWeight: index === 2 ? 'bold' : '500', color: index === 2 ? '#fff' : '#4b5563' }}>
+                      {stage}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#2e7d32', marginTop: 8 }}>
+                ช่วงปัจจุบัน: บำรุงต้นข้าว
+              </Text>
+            </View>
+
+            <View style={f.card}>
+              <Text style={f.cardTitle}>📊 ภาพรวมการบันทึกและต้นทุน</Text>
+              <View style={f.communityGrid}>
+                <View style={f.communityStatBox}>
+                  <Text style={f.communityStatIcon}>📝</Text>
+                  <Text style={f.communityStatNum}>18/24 ราย</Text>
+                  <Text style={f.communityStatLabel}>สมาชิกบันทึกข้อมูลแล้ว</Text>
+                </View>
+                <View style={[f.communityStatBox, { backgroundColor: '#fffde7', borderColor: '#dce775' }]}>
+                  <Text style={f.communityStatIcon}>💵</Text>
+                  <Text style={f.communityStatNum}>1,250 บาท/ไร่</Text>
+                  <Text style={f.communityStatLabel}>ต้นทุนเฉลี่ยต่อไร่</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={f.card}>
+              <Text style={f.cardTitle}>📣 ประกาศจากกลุ่ม</Text>
+              <View style={f.announcementCard}>
+                <Text style={f.announcementMeta}>ประธานกลุ่ม • 17 พ.ย. 2569</Text>
+                <Text style={f.announcementTitle}>นัดสมาชิกนำตัวอย่างข้าวมาตรวจความชื้น</Text>
+                <Text style={f.announcementText}>วันศุกร์ เวลา 09.00 น. ณ ศาลากลุ่ม ก่อนวางแผนจำหน่ายผลผลิต</Text>
+              </View>
+            </View>
+          </>
+        )}
+      </ScrollView>
+
+      {/* 🟢 Bottom Navigation Bar (สไตล์แถบล่างในรูปที่ 4) */}
+      <View style={f.bottomNav}>
+        <TouchableOpacity style={f.bottomNavItem} onPress={() => setRecordMode('daily')}>
+          <Text style={[f.bottomNavIcon, recordMode === 'daily' && f.bottomNavActive]}>🏠</Text>
+          <Text style={[f.bottomNavText, recordMode === 'daily' && f.bottomNavTextActive]}>หน้าหลัก</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={f.bottomNavItem} onPress={() => setRecordMode('annual')}>
+          <Text style={[f.bottomNavIcon, recordMode === 'annual' && f.bottomNavActive]}>🗓️</Text>
+          <Text style={[f.bottomNavText, recordMode === 'annual' && f.bottomNavTextActive]}>รายปี</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={f.bottomNavItem} onPress={() => setRecordMode('community')}>
+          <Text style={[f.bottomNavIcon, recordMode === 'community' && f.bottomNavActive]}>👥</Text>
+          <Text style={[f.bottomNavText, recordMode === 'community' && f.bottomNavTextActive]}>กลุ่ม</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={f.bottomNavItem} onPress={() => setPage('assistant')}>
+          <Text style={f.bottomNavIcon}>🤖</Text>
+          <Text style={f.bottomNavText}>ผู้ช่วย AI</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={f.bottomNavItem} onPress={() => setShowProfileModal(true)}>
+          <Text style={f.bottomNavIcon}>👤</Text>
+          <Text style={f.bottomNavText}>โปรไฟล์</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Modal Profile */}
@@ -769,363 +680,305 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
             <View style={f.modalAvatarCircle}>
               <Text style={f.modalAvatarText}>{user?.name ? user.name.charAt(0) : 'ก'}</Text>
             </View>
-
             <Text style={f.modalFarmerName}>{user?.name}</Text>
             <Text style={f.modalFarmerId}>รหัสสมาชิก: {user?.id}</Text>
-
             <View style={f.modalDivider} />
 
             <View style={f.infoRow}>
               <Text style={f.infoLabel}>🎂 วัน/เดือน/ปีเกิด:</Text>
-              <Text style={f.infoValue}>{displayDob ? displayDob : 'ยังไม่ได้ระบุ'}</Text>
+              <Text style={f.infoValue}>{displayDob || 'ยังไม่ได้ระบุ'}</Text>
             </View>
-
             <View style={f.infoRow}>
               <Text style={f.infoLabel}>👤 อายุ:</Text>
               <Text style={f.infoValue}>{displayAge !== null ? `${displayAge} ปี` : 'ยังไม่ได้ระบุ'}</Text>
             </View>
-
             <View style={f.infoRow}>
               <Text style={f.infoLabel}>🏞️ แปลงที่ครอบครอง:</Text>
-              <Text style={f.infoValue}>2 แปลง</Text>
+              <Text style={f.infoValue}>2 แปลง (5 ไร่)</Text>
             </View>
-
-            <View style={f.infoRow}>
-              <Text style={f.infoLabel}>📏 พื้นที่รวมทั้งหมด:</Text>
-              <Text style={f.infoValue}>5 ไร่</Text>
-            </View>
-
             <View style={f.infoRow}>
               <Text style={f.infoLabel}>📍 ที่ตั้งแปลงหลัก:</Text>
               <Text style={f.infoValue}>ต.ผักไหม อ.ห้วยทับทัน</Text>
             </View>
-
             <View style={f.infoRow}>
               <Text style={f.infoLabel}>🛡️ สถานะ GAP:</Text>
               <Text style={[f.infoValue, { color: '#2e7d32' }]}>ผ่านการรับรอง</Text>
             </View>
 
-            <TouchableOpacity
-              style={f.closeModalBtn}
-              onPress={() => setShowProfileModal(false)}
-            >
+            <TouchableOpacity style={f.closeModalBtn} onPress={() => setShowProfileModal(false)}>
               <Text style={f.closeModalText}>ปิดหน้าต่าง</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-
     </SafeAreaView>
   );
 }
 
 const f = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#ffffff' },
-  mainLayout: { flex: 1, flexDirection: 'row' },
+  safeArea: { flex: 1, backgroundColor: '#f4f7f2' },
 
-  sidebar: {
-    width: 110,
-    backgroundColor: '#72c07b',
-    paddingVertical: 16,
-    paddingHorizontal: 8,
+  // Top Header Bar
+  topHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    backgroundColor: '#2e7d32',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 10,
   },
-  sidebarTop: { alignItems: 'center', width: '100%' },
-  avatarTouch: { alignItems: 'center', width: '100%' },
-  avatarCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  logoBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
-    elevation: 2,
   },
-  avatarText: { color: '#2e7d32', fontSize: 20, fontWeight: 'bold' },
-  sidebarUserName: { color: '#ffffff', fontSize: 12, fontWeight: 'bold', textAlign: 'center' },
-  sidebarUserId: { color: '#e8f5e9', fontSize: 10, marginTop: 1 },
-  profileHint: { color: '#fef08a', fontSize: 8, fontWeight: 'bold', marginTop: 3 },
-
-  sidebarMenu: { width: '100%', gap: 8, marginVertical: 12 },
-  sidebarTab: { alignItems: 'center', paddingVertical: 10, borderRadius: 10 },
-  sidebarTabActive: { backgroundColor: '#2e7d32' },
-  sidebarTabIcon: { fontSize: 18, marginBottom: 2 },
-  sidebarTabText: { color: '#ffffff', fontSize: 10, fontWeight: '600', textAlign: 'center' },
-  sidebarTabTextActive: { color: '#ffffff', fontWeight: 'bold' },
-
-  logoutBtn: {
+  logoEmoji: { fontSize: 20 },
+  searchPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#ffffff',
+    borderRadius: 22,
+    paddingHorizontal: 12,
+    height: 38,
+  },
+  searchIcon: { fontSize: 14, marginRight: 6 },
+  searchInput: { flex: 1, fontSize: 13, color: '#1f2937', outlineStyle: 'none' },
+  headerIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerIconText: { fontSize: 16 },
+
+  scrollContent: { padding: 14, paddingBottom: 28, gap: 14 },
+
+  // Hero Banner
+  heroBanner: {
+    backgroundColor: '#388e3c',
+    borderRadius: 18,
+    padding: 16,
+    elevation: 3,
+    shadowColor: '#1b5e20',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+  },
+  heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  heroTag: { backgroundColor: 'rgba(255,255,255,0.22)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  heroTagRight: { backgroundColor: '#1b5e20', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  heroTagText: { color: '#ffffff', fontSize: 11, fontWeight: 'bold' },
+  heroBody: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  heroGreeting: { color: '#ffffff', fontSize: 18, fontWeight: 'bold' },
+  heroSub: { color: '#e8f5e9', fontSize: 12, marginTop: 3 },
+  heroAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroAvatarText: { color: '#2e7d32', fontSize: 20, fontWeight: 'bold' },
+  heroStatsRow: { flexDirection: 'row', gap: 8 },
+  heroStatPill: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  heroStatLabel: { color: '#e8f5e9', fontSize: 10 },
+  heroStatVal: { color: '#ffffff', fontSize: 13, fontWeight: 'bold', marginTop: 2 },
+
+  // 4-Column Icon Grid
+  gridCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+  },
+  iconGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  iconGridItem: { width: '25%', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4 },
+  iconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  iconEmoji: { fontSize: 24 },
+  iconLabel: { fontSize: 11, color: '#374151', fontWeight: '600', textAlign: 'center' },
+
+  // Section Divider (— หัวข้อ —)
+  sectionDividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 2 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#c8e6c9' },
+  sectionDividerText: { fontSize: 13, fontWeight: 'bold', color: '#2e7d32' },
+
+  // Cards
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 14,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+  },
+  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  cardTitle: { fontSize: 14, fontWeight: 'bold', color: '#1b5e20', marginBottom: 8 },
+  inputCaption: { fontSize: 12, color: '#4b5563', fontWeight: '600', marginBottom: 6 },
+
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  liveDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
+  liveBadgeText: { fontSize: 11, color: '#166534', fontWeight: 'bold' },
+
+  moistureRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  customInput: {
+    borderColor: '#c8e6c9',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 44,
+    backgroundColor: '#f9fafb',
+    fontSize: 13,
+  },
+  saveMoistureBtn: {
+    backgroundColor: '#2e7d32',
+    height: 44,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  saveMoistureText: { color: '#ffffff', fontWeight: 'bold', fontSize: 13 },
+
+  // Videos
+  videoPlayerBox: {
+    backgroundColor: '#2e7d32',
+    borderRadius: 14,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  videoPlayingTitle: { color: '#ffffff', fontSize: 14, fontWeight: 'bold', textAlign: 'center', marginTop: 6 },
+  videoPlayingSub: { color: '#e8f5e9', fontSize: 11, textAlign: 'center', marginTop: 4 },
+  playBtn: { backgroundColor: '#ffffff', paddingVertical: 7, paddingHorizontal: 18, borderRadius: 20, marginTop: 10 },
+  playBtnText: { color: '#2e7d32', fontWeight: 'bold', fontSize: 12 },
+
+  videoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  videoMiniCard: {
+    width: '48.5%',
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  videoMiniCardActive: { backgroundColor: '#e8f5e9', borderColor: '#4caf50', borderWidth: 1.5 },
+  videoMiniTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  videoMiniDur: { fontSize: 10, color: '#2e7d32', fontWeight: 'bold', backgroundColor: '#e8f5e9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
+  videoMiniTitle: { fontSize: 12, fontWeight: 'bold', color: '#1f2937' },
+  videoMiniDesc: { fontSize: 10, color: '#6b7280', marginTop: 3 },
+
+  // Annual
+  monthChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: '#e8f5e9', borderWidth: 1, borderColor: '#c8e6c9' },
+  monthChipActive: { backgroundColor: '#2e7d32', borderColor: '#2e7d32' },
+  monthChipText: { fontSize: 12, color: '#2e7d32', fontWeight: '600' },
+  voiceBtn: { backgroundColor: '#15803d', paddingHorizontal: 14, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  voiceBtnText: { color: '#ffffff', fontSize: 12, fontWeight: 'bold' },
+  primaryFullBtn: { backgroundColor: '#2e7d32', paddingVertical: 12, borderRadius: 12, alignItems: 'center', marginTop: 12 },
+  primaryFullBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 14 },
+  planCardItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f9fbe7', padding: 10, borderRadius: 12, borderWidth: 1, borderColor: '#dce775' },
+  planMonthBadge: { backgroundColor: '#2e7d32', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  planMonthText: { color: '#ffffff', fontSize: 11, fontWeight: 'bold' },
+  planCropName: { fontSize: 13, fontWeight: 'bold', color: '#1b5e20' },
+  planStatusText: { fontSize: 10, color: '#6b7280', marginTop: 2 },
+  emptyText: { fontSize: 12, color: '#9ca3af', textAlign: 'center', marginVertical: 12 },
+
+  // Community
+  communityGrid: { flexDirection: 'row', gap: 8 },
+  communityStatBox: { flex: 1, backgroundColor: '#f1f8e9', padding: 10, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#c8e6c9' },
+  communityStatIcon: { fontSize: 22, marginBottom: 4 },
+  communityStatNum: { fontSize: 14, fontWeight: 'bold', color: '#1b5e20' },
+  communityStatLabel: { fontSize: 10, color: '#4b5563', marginTop: 2, textAlign: 'center' },
+  priceRow: { gap: 8 },
+  priceCard: { backgroundColor: '#f9fbe7', padding: 12, borderRadius: 10, borderLeftWidth: 4, borderLeftColor: '#2e7d32' },
+  priceLabel: { fontSize: 12, color: '#4b5563' },
+  priceValue: { fontSize: 18, fontWeight: 'bold', color: '#1b5e20', marginTop: 2 },
+  priceUnit: { fontSize: 12, fontWeight: 'normal', color: '#6b7280' },
+  aiPriceButton: { backgroundColor: '#e8f5e9', borderColor: '#a5d6a7', borderWidth: 1, borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 10 },
+  aiPriceButtonText: { color: '#1b5e20', fontSize: 12, fontWeight: 'bold' },
+  weatherSummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f9fbe7', borderRadius: 12, padding: 12 },
+  weatherCaption: { fontSize: 11, color: '#6b7280' },
+  weatherTemperature: { fontSize: 22, fontWeight: 'bold', color: '#1b5e20', marginTop: 2 },
+  weatherAdvice: { backgroundColor: '#e8f5e9', borderRadius: 10, padding: 10 },
+  weatherAdviceTitle: { fontSize: 10, color: '#2e7d32', fontWeight: 'bold' },
+  weatherAdviceText: { fontSize: 12, color: '#1b5e20', fontWeight: 'bold', marginTop: 2 },
+  forecastRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  forecastDay: { flex: 1, alignItems: 'center', backgroundColor: '#f9fafb', borderRadius: 10, paddingVertical: 8, borderWidth: 1, borderColor: '#e5e7eb' },
+  forecastDayTitle: { fontSize: 10, color: '#374151', fontWeight: 'bold' },
+  forecastTemperature: { fontSize: 11, color: '#1b5e20', fontWeight: 'bold', marginTop: 4 },
+  forecastRain: { fontSize: 10, color: '#0284c7', marginTop: 2 },
+  announcementCard: { backgroundColor: '#f9fbe7', borderRadius: 12, padding: 12, borderLeftWidth: 4, borderLeftColor: '#7cb342' },
+  announcementMeta: { fontSize: 10, color: '#6b7280' },
+  announcementTitle: { fontSize: 13, color: '#1b5e20', fontWeight: 'bold', marginTop: 4 },
+  announcementText: { fontSize: 12, color: '#4b5563', marginTop: 3, lineHeight: 18 },
+
+  // Timer
+  timerBox: { padding: 12, borderRadius: 14, borderWidth: 1, alignItems: 'center' },
+  timerLabel: { fontSize: 12, fontWeight: 'bold', color: '#854d0e' },
+  timerNum: { fontSize: 18, fontWeight: 'bold', color: '#a16207', marginTop: 2 },
+  timerHint: { fontSize: 11, color: '#991b1b', marginTop: 2 },
+
+  // Bottom Navigation Bar
+  bottomNav: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
     paddingVertical: 8,
     paddingHorizontal: 6,
-    borderRadius: 12,
-    width: '100%',
-    alignItems: 'center',
   },
-  logoutText: { color: '#2e7d32', fontSize: 10, fontWeight: 'bold' },
+  bottomNavItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  bottomNavIcon: { fontSize: 20, opacity: 0.55 },
+  bottomNavActive: { opacity: 1 },
+  bottomNavText: { fontSize: 10, color: '#6b7280', marginTop: 2, fontWeight: '600' },
+  bottomNavTextActive: { color: '#2e7d32', fontWeight: 'bold' },
 
-  contentContainer: { flexGrow: 1, backgroundColor: '#f1f8e9', padding: 12, gap: 12 },
-
-  bannerCard: {
-    backgroundColor: '#ffffff',
-    padding: 10,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    elevation: 1,
-  },
-  toggleSidebarBtn: {
-    backgroundColor: '#72c07b',
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  toggleSidebarIcon: { color: '#ffffff', fontSize: 14, fontWeight: 'bold' },
-  bannerTitle: { color: '#2e7d32', fontSize: 13, fontWeight: 'bold' },
-  bannerLoc: { color: '#666666', fontSize: 10, marginTop: 2 },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#e8f5e9',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  greenDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#4caf50' },
-  statusText: { color: '#2e7d32', fontSize: 10, fontWeight: 'bold' },
-
-  videoWrapper: { backgroundColor: '#1b5e20', borderRadius: 12, padding: 12 },
-  videoPlayerContainer: { backgroundColor: '#2e7d32', borderRadius: 10, padding: 14, alignItems: 'center' },
-  videoPlayingTitle: { color: '#ffffff', fontSize: 12, fontWeight: 'bold', textAlign: 'center', marginTop: 4 },
-  videoPlayingDuration: { color: '#e8f5e9', fontSize: 10, marginTop: 2 },
-  videoDescText: { color: '#f1f8e9', fontSize: 10, textAlign: 'center', marginTop: 4 },
-  playBtn: { backgroundColor: '#ffffff', paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20, marginTop: 10 },
-  playBtnText: { color: '#2e7d32', fontWeight: 'bold', fontSize: 11 },
-
-  videoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    padding: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  videoItemActive: { backgroundColor: '#e8f5e9', borderColor: '#4caf50', borderWidth: 1.5 },
-  videoItemTitle: { fontSize: 11, fontWeight: 'bold', color: '#333333' },
-  videoItemSub: { fontSize: 9, color: '#757575', marginTop: 2 },
-  selectBadge: {
-    backgroundColor: '#e8f5e9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-
-  monthChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#e8f5e9',
-    borderWidth: 1,
-    borderColor: '#c8e6c9',
-  },
-  monthChipActive: { backgroundColor: '#2e7d32', borderColor: '#2e7d32' },
-  monthChipText: { fontSize: 11, color: '#2e7d32', fontWeight: '600' },
-
-  voiceBtn: {
-    backgroundColor: '#15803d',
-    paddingHorizontal: 12,
-    height: 40,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  voiceBtnText: { color: '#ffffff', fontSize: 12, fontWeight: 'bold' },
-
-  planCardItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f9fbe7',
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#dce775',
-  },
-  planMonthBadge: {
-    backgroundColor: '#2e7d32',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  planMonthText: { color: '#ffffff', fontSize: 11, fontWeight: 'bold' },
-  planCropName: { fontSize: 12, fontWeight: 'bold', color: '#1b5e20' },
-  planStatusText: { fontSize: 9, color: '#666', marginTop: 2 },
-
-  communityGrid: { flexDirection: 'row', gap: 8, marginTop: 6 },
-  communityStatBox: {
-    flex: 1,
-    padding: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#c8e6c9',
-  },
-  communityStatIcon: { fontSize: 20, marginBottom: 2 },
-  communityStatNum: { fontSize: 13, fontWeight: 'bold', color: '#2e7d32' },
-  communityStatLabel: { fontSize: 9, color: '#666', marginTop: 2, textAlign: 'center' },
-
-  priceRow: { gap: 8, marginTop: 6 },
-  priceCard: {
-    backgroundColor: '#f9fbe7',
-    padding: 10,
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#2e7d32',
-  },
-  priceLabel: { fontSize: 11, color: '#555', fontWeight: '500' },
-  priceValue: { fontSize: 16, fontWeight: 'bold', color: '#1b5e20', marginTop: 2 },
-  priceUnit: { fontSize: 11, fontWeight: 'normal', color: '#666' },
-  priceUpdated: { fontSize: 10, color: '#78816f', marginTop: -4 },
-  aiPriceButton: {
-    alignItems: 'center',
-    backgroundColor: '#e8f5e9',
-    borderColor: '#a5d6a7',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 9,
-    paddingHorizontal: 10,
-    marginTop: 10,
-  },
-  aiPriceButtonText: { color: '#1b5e20', fontSize: 11, fontWeight: 'bold', textAlign: 'center' },
-
-  weatherSummary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#f9fbe7',
-    borderRadius: 10,
-    padding: 10,
-  },
-  weatherCaption: { fontSize: 10, color: '#66705e' },
-  weatherTemperature: { fontSize: 21, fontWeight: 'bold', color: '#1b5e20', marginTop: 2 },
-  weatherAdvice: {
-    backgroundColor: '#e8f5e9',
-    borderRadius: 8,
-    paddingVertical: 7,
-    paddingHorizontal: 9,
-    maxWidth: '58%',
-  },
-  weatherAdviceTitle: { fontSize: 9, color: '#55705a', fontWeight: 'bold' },
-  weatherAdviceText: { fontSize: 11, color: '#1b5e20', fontWeight: 'bold', marginTop: 2 },
-  sampleNote: { fontSize: 9, color: '#8a8f7e', marginTop: 6 },
-  forecastRow: { flexDirection: 'row', gap: 6, marginTop: 6 },
-  forecastDay: {
-    flex: 1,
-    alignItems: 'center',
-    backgroundColor: '#f7f8ef',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 3,
-    borderWidth: 1,
-    borderColor: '#e4e9d8',
-  },
-  forecastDayTitle: { fontSize: 9, color: '#52614e', fontWeight: 'bold', textAlign: 'center' },
-  forecastTemperature: { fontSize: 10, color: '#1b5e20', fontWeight: 'bold', marginTop: 5 },
-  forecastRain: { fontSize: 10, color: '#3578a5', marginTop: 3 },
-  weatherFootnote: { fontSize: 10, color: '#66705e', marginTop: 7 },
-
-  productionStageRow: { flexDirection: 'row', gap: 5, marginTop: 8 },
-  productionStage: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f7f8ef',
-    borderColor: '#e4e9d8',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 7,
-    paddingHorizontal: 2,
-  },
-  productionStageComplete: { backgroundColor: '#e8f5e9', borderColor: '#c8e6c9' },
-  productionStageCurrent: { backgroundColor: '#2e7d32', borderColor: '#2e7d32' },
-  productionStageNumber: { color: '#798071', fontSize: 10, fontWeight: 'bold' },
-  productionStageNumberComplete: { color: '#2e7d32' },
-  productionStageNumberCurrent: { color: '#ffffff' },
-  productionStageLabel: { color: '#66705e', fontSize: 9, marginTop: 3, textAlign: 'center' },
-  productionStageLabelCurrent: { color: '#ffffff', fontWeight: 'bold' },
-  currentStageText: { color: '#2e7d32', fontSize: 10, fontWeight: 'bold', marginTop: 8 },
-
-  announcementCard: { backgroundColor: '#f9fbe7', borderRadius: 10, padding: 10, borderLeftWidth: 4, borderLeftColor: '#7cb342' },
-  announcementMeta: { fontSize: 9, color: '#78816f' },
-  announcementTitle: { fontSize: 12, color: '#1b5e20', fontWeight: 'bold', marginTop: 5 },
-  announcementText: { fontSize: 11, color: '#596453', lineHeight: 17, marginTop: 3 },
-
-  statusCard: { backgroundColor: '#ffffff', borderRadius: 12, padding: 12, elevation: 1 },
-  sectionTitle: { color: '#2e7d32', fontWeight: 'bold', fontSize: 13, marginBottom: 8 },
-  statusGrid: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  statusBox: {
-    flex: 1,
-    backgroundColor: '#f9fbe7',
-    borderRadius: 8,
-    padding: 8,
-    borderWidth: 1,
-    borderColor: '#dce775',
-  },
-  statusBoxLabel: { fontSize: 10, color: '#616161', fontWeight: 'bold' },
-  statusBoxValue: { fontSize: 13, fontWeight: 'bold', marginTop: 2 },
-  statusBoxSub: { fontSize: 9, color: '#757575', marginTop: 2 },
-
-  timerBox: { padding: 10, borderRadius: 8, borderWidth: 1, alignItems: 'center' },
-  timerLabel: { fontSize: 11, fontWeight: 'bold', color: '#854d0e' },
-  timerNum: { fontSize: 16, fontWeight: 'bold', color: '#a16207', marginTop: 2 },
-  timerHint: { fontSize: 10, color: '#991b1b', marginTop: 2 },
-
-  sectionCard: { backgroundColor: '#ffffff', borderRadius: 12, padding: 12, elevation: 1 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  gridBtn: { width: '48%', borderRadius: 10, padding: 10, justifyContent: 'space-between', minHeight: 80 },
-  gridIcon: { fontSize: 20, marginBottom: 2 },
-  gridTitle: { color: '#ffffff', fontWeight: 'bold', fontSize: 12 },
-  gridSub: { color: 'rgba(255, 255, 255, 0.9)', fontSize: 9, marginTop: 2 },
-
-  customInput: {
-    borderColor: '#a5d6a7',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    height: 40,
-    backgroundColor: '#fafafa',
-    fontSize: 12,
-    borderWidth: 1,
-  },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  
-  modalCard: { width: '85%', backgroundColor: '#ffffff', borderRadius: 16, padding: 20, alignItems: 'center', elevation: 5 },
-  modalAvatarCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#72c07b',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalCard: { width: '90%', maxWidth: 420, backgroundColor: '#ffffff', borderRadius: 18, padding: 20, alignItems: 'center', elevation: 5 },
+  modalAvatarCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#2e7d32', justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
   modalAvatarText: { color: '#ffffff', fontSize: 28, fontWeight: 'bold' },
-  modalFarmerName: { fontSize: 18, fontWeight: 'bold', color: '#2e7d32' },
-  modalFarmerId: { fontSize: 12, color: '#757575', marginTop: 2 },
-  modalDivider: { width: '100%', height: 1, backgroundColor: '#e0e0e0', marginVertical: 14 },
+  modalFarmerName: { fontSize: 18, fontWeight: 'bold', color: '#1b5e20' },
+  modalFarmerId: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  modalDivider: { width: '100%', height: 1, backgroundColor: '#e5e7eb', marginVertical: 14 },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', paddingVertical: 6 },
-  infoLabel: { fontSize: 13, color: '#616161', fontWeight: '500' },
-  infoValue: { fontSize: 13, color: '#212121', fontWeight: 'bold' },
-  closeModalBtn: { backgroundColor: '#2e7d32', width: '100%', paddingVertical: 10, borderRadius: 10, alignItems: 'center', marginTop: 18 },
-  closeModalText: { color: '#ffffff', fontWeight: 'bold', fontSize: 13 },
+  infoLabel: { fontSize: 13, color: '#4b5563' },
+  infoValue: { fontSize: 13, color: '#111827', fontWeight: 'bold' },
+  closeModalBtn: { backgroundColor: '#2e7d32', width: '100%', paddingVertical: 11, borderRadius: 12, alignItems: 'center', marginTop: 18 },
+  closeModalText: { color: '#ffffff', fontWeight: 'bold', fontSize: 14 },
 });
