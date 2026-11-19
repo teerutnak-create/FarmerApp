@@ -20,6 +20,7 @@ import PhotoScreen from './PhotoScreen';
 import PlotInfoScreen from './PlotInfoScreen';
 import YieldScreen from './YieldScreen';
 import AssistantScreen from './AssistantScreen';
+import { SharedBottomNav, SharedTabContent } from './SharedBottomTabs';
 import { USERS as DEFAULT_USERS } from '../data/users';
 
 const HARVEST = 'เกี่ยวข้าวเสร็จแล้ว';
@@ -63,6 +64,7 @@ const calculateAge = (dobString, defaultAge) => {
 
 export default function FarmerScreen({ user, logs, onLog, onLogout }) {
   const [recordMode, setRecordMode] = useState('daily');
+  const [bottomTab, setBottomTab] = useState('home');
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -314,7 +316,17 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
       </View>
 
       {/* เนื้อหาหลัก */}
-      <ScrollView contentContainerStyle={f.scrollContent} showsVerticalScrollIndicator={false}>
+      {bottomTab !== 'home' ? (
+   <SharedTabContent
+     activeTab={bottomTab}
+     user={user}
+     role="farmer"
+     logs={logs}
+     onLogout={handleLogout}
+     onOpenProfile={() => setShowProfileModal(true)}
+   />
+ ) : (
+  <ScrollView contentContainerStyle={f.scrollContent} showsVerticalScrollIndicator={false}>
         {/* 🟢 Hero Banner Card (สไตล์แบนเนอร์ด้านบนของรูปที่ 4 ในธีมสีเขียว) */}
         <View style={f.heroBanner}>
           <View style={f.heroTopRow}>
@@ -644,34 +656,10 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
           </>
         )}
       </ScrollView>
+    )}
 
       {/* 🟢 Bottom Navigation Bar (สไตล์แถบล่างในรูปที่ 4) */}
-      <View style={f.bottomNav}>
-        <TouchableOpacity style={f.bottomNavItem} onPress={() => setRecordMode('daily')}>
-          <Text style={[f.bottomNavIcon, recordMode === 'daily' && f.bottomNavActive]}>🏠</Text>
-          <Text style={[f.bottomNavText, recordMode === 'daily' && f.bottomNavTextActive]}>หน้าหลัก</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={f.bottomNavItem} onPress={() => setRecordMode('annual')}>
-          <Text style={[f.bottomNavIcon, recordMode === 'annual' && f.bottomNavActive]}>🗓️</Text>
-          <Text style={[f.bottomNavText, recordMode === 'annual' && f.bottomNavTextActive]}>รายปี</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={f.bottomNavItem} onPress={() => setRecordMode('community')}>
-          <Text style={[f.bottomNavIcon, recordMode === 'community' && f.bottomNavActive]}>👥</Text>
-          <Text style={[f.bottomNavText, recordMode === 'community' && f.bottomNavTextActive]}>กลุ่ม</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={f.bottomNavItem} onPress={() => setPage('assistant')}>
-          <Text style={f.bottomNavIcon}>🤖</Text>
-          <Text style={f.bottomNavText}>ผู้ช่วย AI</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={f.bottomNavItem} onPress={() => setShowProfileModal(true)}>
-          <Text style={f.bottomNavIcon}>👤</Text>
-          <Text style={f.bottomNavText}>โปรไฟล์</Text>
-        </TouchableOpacity>
-      </View>
+      <SharedBottomNav activeTab={bottomTab} onSelectTab={setBottomTab} unreadCount={3} />
 
       {/* Modal Profile */}
       <Modal visible={showProfileModal} animationType="fade" transparent>

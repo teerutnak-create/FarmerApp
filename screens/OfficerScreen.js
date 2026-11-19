@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { USERS } from '../data/users';
 import * as ImagePicker from 'expo-image-picker';
 import DailyLogScreen from './DailyLogScreen';
+import { SharedBottomNav, SharedTabContent } from './SharedBottomTabs';
 import {
   FARMER_LOCATIONS_KEY,
   FARMER_VISITS_KEY,
@@ -97,6 +98,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
   const [currentPage, setCurrentPage] = useState('home');
   const [searchQuery, setSearchQuery] = useState('');
   const [homeTab, setHomeTab] = useState('all'); // 'all' | 'map' | 'farmers'
+  const [bottomTab, setBottomTab] = useState('home');
   const [auditTab, setAuditTab] = useState('gap');
   const [selectedFarmer, setSelectedFarmer] = useState(null);
   const [registeredFarmers, setRegisteredFarmers] = useState([]);
@@ -665,6 +667,16 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
 
         {/* หน้าหลัก */}
         {currentPage === 'home' ? (
+          bottomTab !== 'home' ? (
+            
+       <SharedTabContent
+         activeTab={bottomTab}
+         user={user}
+         role="officer"
+         logs={logs}
+         onLogout={onLogout}
+       />
+     ) : (
           <ScrollView contentContainerStyle={o.container} showsVerticalScrollIndicator={false}>
             
             {/* 🟢 Hero Banner เจ้าหน้าที่ */}
@@ -922,6 +934,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
             )}
             
           </ScrollView>
+        )
         ) : (
           /* หน้าลงตรวจแปลง */
           <View style={{ flex: 1 }}>
@@ -1415,29 +1428,9 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
           </View>
         </Modal>
         {currentPage === 'home' && (
-          <View style={o.bottomNav}>
-            <TouchableOpacity style={o.bottomNavItem} onPress={() => setHomeTab('all')}>
-              <Text style={[o.bottomNavIcon, homeTab === 'all' && o.bottomNavActive]}>🏠</Text>
-              <Text style={[o.bottomNavText, homeTab === 'all' && o.bottomNavTextActive]}>หน้าหลัก</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={o.bottomNavItem} onPress={() => setHomeTab('map')}>
-              <Text style={[o.bottomNavIcon, homeTab === 'map' && o.bottomNavActive]}>🗺️</Text>
-              <Text style={[o.bottomNavText, homeTab === 'map' && o.bottomNavTextActive]}>แผนที่</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={o.bottomNavItem} onPress={() => setHomeTab('farmers')}>
-              <Text style={[o.bottomNavIcon, homeTab === 'farmers' && o.bottomNavActive]}>👨‍🌾</Text>
-              <Text style={[o.bottomNavText, homeTab === 'farmers' && o.bottomNavTextActive]}>เกษตรกร</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={o.bottomNavItem} onPress={() => setShowManageModal(true)}>
-              <Text style={o.bottomNavIcon}>⚙️</Text>
-              <Text style={o.bottomNavText}>จัดการ</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={o.bottomNavItem} onPress={handleExportPDF}>
-              <Text style={o.bottomNavIcon}>📄</Text>
-              <Text style={o.bottomNavText}>ออก PDF</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        <SharedBottomNav activeTab={bottomTab} onSelectTab={setBottomTab} unreadCount={2} />
+      )}
+        
 
       </View>
     </SafeAreaView>
