@@ -536,36 +536,51 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
   const handleConnectBluetooth = async () => {
     setSensorLoading(true);
     try {
-      // ใช้พิกัดแปลงของเกษตรกรที่เลือกอยู่ (ถ้าไม่มี ใช้พิกัด ต.ผักไหม)
       const farmerLoc = selectedFarmer ? latestLocations[selectedFarmer.id] : null;
       const lat = farmerLoc?.lat || 14.8743;
       const lng = farmerLoc?.lng || 103.8397;
 
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}¤t=temperature_2m,rain&hourly=shortwave_radiation&timezone=Asia%2FBangkok&forecast_days=1`;
+      const params = new URLSearchParams({
+        latitude: String(lat),
+        longitude: String(lng),
+        current: 'temperature_2m,rain',
+        hourly: 'shortwave_radiation',
+        timezone: 'Asia/Bangkok',
+        forecast_days: '1',
+      });
+      const url = `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
+
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
       const current = data.current || {};
-      const temp = current.temperature_2m !== undefined ? Number(current.temperature_2m).toFixed(1) : '--';
-      const rain = current.rain !== undefined ? Number(current.rain).toFixed(1) : '0.0';
-      // แปลงรังสีดวงอาทิตย์ (W/m²) เป็นความสว่าง (lux) โดยประมาณ
+      const temp =
+        current.temperature_2m !== undefined
+          ? Number(current.temperature_2m).toFixed(1)
+          : '--';
+      const rain =
+        current.rain !== undefined ? Number(current.rain).toFixed(1) : '0.0';
+
       const currentHour = new Date().getHours();
       const radiation = data.hourly?.shortwave_radiation?.[currentHour] ?? 0;
       const sunlight = Math.round(radiation * 120).toLocaleString();
 
       setBtConnected(true);
       setSensorData({
-        moisture: '68.5', // คงค่าจากเซนเซอร์วัดความชื้นดินไว้
+        moisture: '68.5',
         temp,
         sunlight,
         rain,
       });
 
-      showAlert('ดึงข้อมูลสำเร็จ 📡', `อัปเดตสภาพอากาศจริง (พิกัด ${lat.toFixed(4)}, ${lng.toFixed(4)}) เรียบร้อย`);
+      showAlert(
+        'ดึงข้อมูลสำเร็จ 📡',
+        `อัปเดตสภาพอากาศจริง (พิกัด ${lat.toFixed(4)}, ${lng.toFixed(4)}) เรียบร้อย`
+      );
     } catch (error) {
       console.error('Weather API error:', error);
-      showAlert('ดึงข้อมูลไม่สำเร็จ', 'ไม่สามารถเชื่อมต่อ Weather API ได้ กรุณาตรวจสอบอินเทอร์เน็ต');
+      showAlert('ดึงข้อมูลไม่สำเร็จ', `ไม่สามารถเชื่อมต่อ Weather API ได้ (${error.message})`);
     } finally {
       setSensorLoading(false);
     }
