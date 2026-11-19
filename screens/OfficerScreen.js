@@ -533,7 +533,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
 
   const [sensorLoading, setSensorLoading] = useState(false);
 
-const handleConnectBluetooth = async () => {
+  const handleConnectBluetooth = async () => {
     setSensorLoading(true);
     try {
       // ใช้พิกัดแปลงของเกษตรกรที่เลือกอยู่ (ถ้าไม่มี ใช้พิกัด ต.ผักไหม)
@@ -541,21 +541,15 @@ const handleConnectBluetooth = async () => {
       const lat = farmerLoc?.lat || 14.8743;
       const lng = farmerLoc?.lng || 103.8397;
 
-      // ย้าย shortwave_radiation ไปไว้ใน hourly แทน current
       const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}¤t=temperature_2m,rain&hourly=shortwave_radiation&timezone=Asia%2FBangkok&forecast_days=1`;
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
       const current = data.current || {};
-      const temp =
-        current.temperature_2m !== undefined
-          ? Number(current.temperature_2m).toFixed(1)
-          : '--';
-      const rain =
-        current.rain !== undefined ? Number(current.rain).toFixed(1) : '0.0';
-
-      // ดึงค่าแสงแดดตามชั่วโมงปัจจุบัน (0-23) แล้วแปลง W/m² เป็น lux
+      const temp = current.temperature_2m !== undefined ? Number(current.temperature_2m).toFixed(1) : '--';
+      const rain = current.rain !== undefined ? Number(current.rain).toFixed(1) : '0.0';
+      // แปลงรังสีดวงอาทิตย์ (W/m²) เป็นความสว่าง (lux) โดยประมาณ
       const currentHour = new Date().getHours();
       const radiation = data.hourly?.shortwave_radiation?.[currentHour] ?? 0;
       const sunlight = Math.round(radiation * 120).toLocaleString();
@@ -568,18 +562,118 @@ const handleConnectBluetooth = async () => {
         rain,
       });
 
-      showAlert(
-        'ดึงข้อมูลสำเร็จ 📡',
-        `อัปเดตสภาพอากาศจริง (พิกัด ${lat.toFixed(4)}, ${lng.toFixed(4)}) เรียบร้อย`
-      );
+      showAlert('ดึงข้อมูลสำเร็จ 📡', `อัปเดตสภาพอากาศจริง (พิกัด ${lat.toFixed(4)}, ${lng.toFixed(4)}) เรียบร้อย`);
     } catch (error) {
       console.error('Weather API error:', error);
-      showAlert('ดึงข้อมูลไม่สำเร็จ', `ไม่สามารถเชื่อมต่อ Weather API ได้ (${error.message})`);
+      showAlert('ดึงข้อมูลไม่สำเร็จ', 'ไม่สามารถเชื่อมต่อ Weather API ได้ กรุณาตรวจสอบอินเทอร์เน็ต');
     } finally {
       setSensorLoading(false);
     }
   };
-  
+
+  const handleSubmitAudit = () => {
+    const generatedLot = 'PKM-20261008-089-A' + Math.floor(Math.random() * 9 + 1);
+    setLotId(generatedLot);
+    showAlert('อนุมัติสำเร็จ ✅', `รหัสล็อตสินค้า: ${generatedLot}`);
+  };
+
+  const handleScanAI = async () => {
+    let permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permissionResult.granted === false) {
+      showAlert('แจ้งเตือน', 'ต้องขออนุญาตเข้าถึงรูปภาพก่อนครับ');
+      return;
+    }
+
+    let pickerResult = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true, 
+      aspect: [1, 1], 
+      quality: 0.8,
+    });
+
+    if (pickerResult.canceled) {
+      return; 
+    }
+
+    const realImageUri = pickerResult.assets[0].uri;
+    setAiLoading(true);
+
+    try {
+      const formData = new FormData();
+      if (Platform.OS === 'web') {
+        const response = await fetch(realImageUri);
+        const blob = await response.blob();
+        formData.append('file', blob, 'upload.jpg');
+      } else {
+        formData.append('file', {
+          uri: realImageUri,
+          name: 'upload.jpg',
+          type: 'image/jpeg',
+        });
+      }
+
+      const res = await fetch('https://576lb288-5000.asse.devtunnels.ms/predict', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await res.json();
+      
+      if (res.ok) {
+        const now = new Date();
+        const timeString = now.toLocaleString('th-TH');
+
+        const newRecord = {
+          id: Date.now().toString(),
+          image: realImageUri,
+          result: result,
+          timestamp: timeString
+        };
+
+        setAiHistory((prevHistory) => {
+          const currentFarmerId = selectedFarmer.id;
+          const existingHistory = prevHistory[currentFarmerId] || [];
+          return {
+            ...prevHistory,
+            [currentFarmerId]: [newRecord, ...existingHistory]
+          };
+        });
+      } else {
+        showAlert('แจ้งเตือนจากเซิร์ฟเวอร์', result.error || 'เกิดข้อผิดพลาดในการวิเคราะห์');
+      }
+    } catch (error) {
+      console.error(error);
+      showAlert('เชื่อมต่อไม่ได้', 'กรุณาตรวจสอบลิงก์ VS Code ว่าตั้งเป็น Public หรือยัง');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  if (currentPage === 'officer_form') {
+    return (
+      <DailyLogScreen
+        isOfficer={true}
+        targetFarmer={targetFarmerForAdd}
+        initialData={editingLogData}
+        onSave={(type, data) => {
+          if (editingLogData && onUpdateLog) {
+            onUpdateLog(editingLogData.id, data);
+            showAlert('อัปเดตสำเร็จ ✏️', `แก้ไขข้อมูลให้ คุณ${targetFarmerForAdd?.name || ''} เรียบร้อยแล้ว`);
+          } else if (onSaveLogForFarmer && targetFarmerForAdd) {
+            onSaveLogForFarmer(targetFarmerForAdd.id, targetFarmerForAdd.name, type, data);
+            showAlert('บันทึกสำเร็จ ✅', `บันทึกข้อมูลให้ คุณ${targetFarmerForAdd.name} เรียบร้อยแล้ว`);
+          }
+          setEditingLogData(null);
+          setCurrentPage('home');
+        }}
+        onClose={() => {
+          setEditingLogData(null);
+          setCurrentPage('home');
+        }}
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={o.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#2e7d32" />
