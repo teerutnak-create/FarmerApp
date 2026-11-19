@@ -531,10 +531,45 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
     showAlert('ดึงพิกัดสำเร็จ 📍', 'GPS High-Precision (±1.5m)');
   };
 
-  const handleConnectBluetooth = () => {
-    setBtConnected(true);
-    setSensorData({ moisture: '68.5', temp: '28.4', sunlight: '45000', rain: '15' });
-    showAlert('เชื่อมต่อสำเร็จ 📡', 'BT-SENSOR-09 อ่านค่าเรียบร้อย');
+  const [sensorLoading, setSensorLoading] = useState(false);
+
+  const handleConnectBluetooth = async () => {
+    setSensorLoading(true);
+    try {
+      // ใช้พิกัดแปลงของเกษตรกรที่เลือกอยู่ (ถ้าไม่มี ใช้พิกัด ต.ผักไหม)
+      const farmerLoc = selectedFarmer ? latestLocations[selectedFarmer.id] : null;
+      const lat = farmerLoc?.lat || 14.8743;
+      const lng = farmerLoc?.lng || 103.8397;
+
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}¤t=temperature_2m,rain,shortwave_radiation&timezone=Asia%2FBangkok`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Weather API error');
+      const data = await res.json();
+
+      const current = data.current || {};
+      const temp = current.temperature_2m !== undefined ? Number(current.temperature_2m).toFixed(1) : '--';
+      const rain = current.rain !== undefined ? Number(current.rain).toFixed(1) : '0.0';
+      // แปลงรังสีดวงอาทิตย์ (W/m²) เป็นความสว่าง (lux) โดยประมาณ
+      const sunlight =
+        current.shortwave_radiation !== undefined
+          ? Math.round(current.shortwave_radiation * 120).toLocaleString()
+          : '0';
+
+      setBtConnected(true);
+      setSensorData({
+        moisture: '68.5', // คงค่าจากเซนเซอร์วัดความชื้นดินไว้
+        temp,
+        sunlight,
+        rain,
+      });
+
+      showAlert('ดึงข้อมูลสำเร็จ 📡', `อัปเดตสภาพอากาศจริง (พิกัด ${lat.toFixed(4)}, ${lng.toFixed(4)}) เรียบร้อย`);
+    } catch (error) {
+      console.error('Weather API error:', error);
+      showAlert('ดึงข้อมูลไม่สำเร็จ', 'ไม่สามารถเชื่อมต่อ Weather API ได้ กรุณาตรวจสอบอินเทอร์เน็ต');
+    } finally {
+      setSensorLoading(false);
+    }
   };
 
   const handleSubmitAudit = () => {
@@ -1134,8 +1169,14 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
                       </View>
                     </View>
 
-                    <TouchableOpacity style={[o.greenBtn, { backgroundColor: '#0284c7' }]} onPress={handleConnectBluetooth}>
-                      <Text style={o.greenBtnText}>เชื่อมต่อเซนเซอร์</Text>
+                    <TouchableOpacity
+                      style={[o.greenBtn, { backgroundColor: '#0284c7', opacity: sensorLoading ? 0.7 : 1 }]}
+                      onPress={handleConnectBluetooth}
+                      disabled={sensorLoading}
+                    >
+                      <Text style={o.greenBtnText}>
+                        {sensorLoading ? '⏳ กำลังดึงข้อมูลอากาศจริง...' : '🌐 ดึงข้อมูลอากาศจริง & เซนเซอร์'}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 </View>
