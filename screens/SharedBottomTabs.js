@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Switch,
 } from 'react-native';
+import { requestAssistant } from '../lib/assistantApi';
 
 // 🟢 1. แถบเมนูด้านล่าง (ใช้ร่วมกันทั้ง 2 ฝั่ง)
 export function SharedBottomNav({ activeTab, onSelectTab, unreadCount = 2 }) {
@@ -60,46 +61,98 @@ export function SharedTabContent({
 }) {
   const [largeText, setLargeText] = useState(false);
   const [chatInput, setChatInput] = useState('');
-  const [messages, setMessages] = useState([
-    {
-      id: '1',
-      sender: role === 'farmer' ? 'เจ้าหน้าที่สมศรี' : 'คุณลุงสมหมาย',
-      isMe: false,
-      text:
-        role === 'farmer'
-          ? 'สวัสดีครับ มีคำถามเรื่องโรคข้าวหรือการตรวจ GAP ทักมาได้เลยนะครับ'
-          : 'สวัสดีครับเจ้าหน้าที่ วันศุกร์นี้ผมพร้อมให้ลงตรวจแปลงแล้วครับ',
-      time: '09:30',
-    },
-    {
-      id: '2',
-      sender: 'ฉัน',
-      isMe: true,
-      text:
-        role === 'farmer'
-          ? 'รับทราบครับ เดี๋ยวช่วงบ่ายจะถ่ายรูปใบข้าวส่งให้ช่วยดูครับ'
-          : 'รับทราบครับ เดี๋ยวเจอกันเวลา 09.00 น. ที่แปลงนะครับ',
-      time: '09:32',
-    },
-  ]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [messages, setMessages] = useState(() =>
+    role === 'farmer'
+      ? [
+          {
+            id: 'welcome',
+            sender: 'ผู้ช่วย AI',
+            isMe: false,
+            role: 'assistant',
+            text: 'สวัสดีครับ มีคำถามเรื่องข้าว การจัดการน้ำ ปุ๋ย หรือมาตรฐาน GAP ถามได้เลยครับ',
+            time: '09:30',
+          },
+        ]
+      : [
+          {
+            id: '1',
+            sender: 'คุณลุงสมหมาย',
+            isMe: false,
+            text: 'สวัสดีครับเจ้าหน้าที่ วันศุกร์นี้ผมพร้อมให้ลงตรวจแปลงแล้วครับ',
+            time: '09:30',
+          },
+          {
+            id: '2',
+            sender: 'ฉัน',
+            isMe: true,
+            text: 'รับทราบครับ เดี๋ยวเจอกันเวลา 09.00 น. ที่แปลงนะครับ',
+            time: '09:32',
+          },
+        ]
+  );
 
-  const handleSendChat = () => {
-    if (!chatInput.trim()) return;
+  const handleSendChat = async () => {
+    const textToSend = chatInput.trim();
+    if (!textToSend || chatLoading) return;
+
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(
       now.getMinutes()
     ).padStart(2, '0')}`;
-    setMessages([
-      ...messages,
-      {
-        id: Date.now().toString(),
-        sender: 'ฉัน',
-        isMe: true,
-        text: chatInput.trim(),
-        time: timeStr,
-      },
-    ]);
+    const userMessage = {
+      id: Date.now().toString(),
+      sender: 'ฉัน',
+      isMe: true,
+      role: 'user',
+      text: textToSend,
+      time: timeStr,
+    };
+    setMessages((current) => [...current, userMessage]);
     setChatInput('');
+
+    if (role !== 'farmer') return;
+
+    setChatLoading(true);
+    try {
+      const history = messages
+        .filter((message) => message.id !== 'welcome' && !message.failed && !message.isError)
+        .filter((message) => message.role)
+        .map((message) => ({ role: message.role, content: message.text }));
+      const reply = await requestAssistant(
+        [...history, { role: 'user', content: textToSend }]
+      );
+      const replyTime = new Date();
+      setMessages((current) => [
+        ...current,
+        {
+          id: `${Date.now()}-assistant`,
+          sender: 'ผู้ช่วย AI',
+          isMe: false,
+          role: 'assistant',
+          text: reply,
+          time: `${String(replyTime.getHours()).padStart(2, '0')}:${String(
+            replyTime.getMinutes()
+          ).padStart(2, '0')}`,
+        },
+      ]);
+    } catch (error) {
+      setMessages((current) => [
+        ...current.map((message) =>
+          message.id === userMessage.id ? { ...message, failed: true } : message
+        ),
+        {
+          id: `${Date.now()}-error`,
+          sender: 'ผู้ช่วย AI',
+          isMe: false,
+          isError: true,
+          text: `ขออภัย ส่งคำถามไม่สำเร็จ: ${error.message}`,
+          time: timeStr,
+        },
+      ]);
+    } finally {
+      setChatLoading(false);
+    }
   };
 
   const fs = (size) => (largeText ? size + 3 : size);
@@ -110,19 +163,32 @@ export function SharedTabContent({
       <View style={st.chatContainer}>
         <View style={st.chatHeader}>
           <Text style={[st.sectionTitle, { marginBottom: 0, fontSize: fs(14) }]}>
-            💬 {role === 'farmer' ? 'ห้องปรึกษาเจ้าหน้าที่เกษตร' : 'ห้องแชทติดต่อเกษตรกร'}
+            💬 {role === 'farmer' ? 'ห้องปรึกษา AI เกษตร' : 'ห้องแชทติดต่อเกษตรกร'}
           </Text>
-          <Text style={{ fontSize: 11, color: '#2e7d32' }}>● ออนไลน์</Text>
+          <Text style={{ fontSize: 11, color: '#2e7d32' }}>
+            {role === 'farmer' ? '● AI พร้อมให้คำปรึกษา' : '● ออนไลน์'}
+          </Text>
         </View>
 
         <ScrollView contentContainerStyle={{ padding: 12, gap: 10 }}>
           {messages.map((m) => (
             <View
               key={m.id}
-              style={[st.chatBubble, m.isMe ? st.chatMe : st.chatOther]}
+              style={[
+                st.chatBubble,
+                m.isMe ? st.chatMe : st.chatOther,
+                m.isError && st.chatError,
+              ]}
             >
               {!m.isMe && <Text style={st.chatSender}>{m.sender}</Text>}
-              <Text style={[st.chatText, m.isMe && { color: '#fff' }, { fontSize: fs(13) }]}>
+              <Text
+                style={[
+                  st.chatText,
+                  m.isMe && { color: '#fff' },
+                  m.isError && st.chatErrorText,
+                  { fontSize: fs(13) },
+                ]}
+              >
                 {m.text}
               </Text>
               <Text style={[st.chatTime, m.isMe && { color: '#e8f5e9' }]}>
@@ -130,19 +196,30 @@ export function SharedTabContent({
               </Text>
             </View>
           ))}
+          {role === 'farmer' && chatLoading && (
+            <View style={[st.chatBubble, st.chatOther]}>
+              <Text style={st.chatSender}>ผู้ช่วย AI</Text>
+              <Text style={[st.chatText, { fontSize: fs(13) }]}>กำลังคิดคำตอบ...</Text>
+            </View>
+          )}
         </ScrollView>
 
         <View style={st.chatInputRow}>
           <TextInput
             style={st.chatInput}
-            placeholder="พิมพ์ข้อความที่นี่..."
+            placeholder={role === 'farmer' ? 'พิมพ์คำถามถึงผู้ช่วย AI...' : 'พิมพ์ข้อความที่นี่...'}
             placeholderTextColor="#9ca3af"
             value={chatInput}
             onChangeText={setChatInput}
             onSubmitEditing={handleSendChat}
+            returnKeyType="send"
           />
-          <TouchableOpacity style={st.sendBtn} onPress={handleSendChat}>
-            <Text style={st.sendBtnText}>ส่ง</Text>
+          <TouchableOpacity
+            style={[st.sendBtn, (chatLoading || !chatInput.trim()) && st.sendBtnDisabled]}
+            onPress={handleSendChat}
+            disabled={chatLoading || !chatInput.trim()}
+          >
+            <Text style={st.sendBtnText}>{chatLoading ? '...' : 'ส่ง'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -321,12 +398,15 @@ const st = StyleSheet.create({
   chatBubble: { maxWidth: '80%', padding: 10, borderRadius: 14 },
   chatMe: { alignSelf: 'flex-end', backgroundColor: '#2e7d32', borderBottomRightRadius: 4 },
   chatOther: { alignSelf: 'flex-start', backgroundColor: '#ffffff', borderBottomLeftRadius: 4, borderWidth: 1, borderColor: '#e5e7eb' },
+  chatError: { backgroundColor: '#ffebee', borderColor: '#ef9a9a' },
+  chatErrorText: { color: '#c62828' },
   chatSender: { fontSize: 10, fontWeight: 'bold', color: '#2e7d32', marginBottom: 2 },
   chatText: { fontSize: 13, color: '#1f2937' },
   chatTime: { fontSize: 9, color: '#9ca3af', alignSelf: 'flex-end', marginTop: 4 },
   chatInputRow: { flexDirection: 'row', padding: 10, backgroundColor: '#ffffff', borderTopWidth: 1, borderTopColor: '#e5e7eb', gap: 8 },
   chatInput: { flex: 1, backgroundColor: '#f3f4f6', borderRadius: 20, paddingHorizontal: 14, height: 40, fontSize: 13 },
   sendBtn: { backgroundColor: '#2e7d32', paddingHorizontal: 18, borderRadius: 20, justifyContent: 'center' },
+  sendBtnDisabled: { backgroundColor: '#a5d6a7' },
   sendBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
 
   // Alerts
