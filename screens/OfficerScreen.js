@@ -1373,6 +1373,19 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
                           </Text>
                         </View>
                       ))}
+
+                      {/* หมายเหตุตัวเล็กแบบไม่เด่น */}
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          color: '#94a3b8',
+                          textAlign: 'center',
+                          marginTop: 12,
+                          lineHeight: 15,
+                        }}
+                      >
+                        * หมายเหตุ: ผลการวิเคราะห์โรคและธาตุอาหารเป็นเพียงการประเมินเบื้องต้นจากภาพถ่ายเท่านั้น โปรดตรวจสอบอาการในแปลงจริงอย่างละเอียดอีกครั้ง
+                      </Text>
                     </View>
                   )}
 
