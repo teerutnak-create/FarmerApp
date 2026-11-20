@@ -67,6 +67,7 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
   const [bottomTab, setBottomTab] = useState('home');
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showDailyTutorials, setShowDailyTutorials] = useState(false);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const videoList = [
@@ -430,36 +431,48 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
 
             {/* วิดีโอคู่มือการใช้งาน */}
             <View style={f.card}>
-              <Text style={f.cardTitle}>🎥 วิดีโอสอนวิธีใช้งาน</Text>
+              <Text style={f.cardTitle}>🎥 การสอนบันทึกกิจกรรมประจำวัน</Text>
 
               <View style={f.videoPlayerBox}>
                 <Text style={{ fontSize: 32 }}>🎬</Text>
                 <Text style={f.videoPlayingTitle}>{activeVideo.title}</Text>
                 <Text style={f.videoPlayingSub}>⏱️ {activeVideo.duration} • {activeVideo.desc}</Text>
-                <TouchableOpacity style={f.playBtn} onPress={() => setIsPlaying(!isPlaying)}>
-                  <Text style={f.playBtnText}>{isPlaying ? '⏸️ หยุดเล่น' : '▶️ เล่นวิดีโอ'}</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                  <TouchableOpacity style={f.playBtn} onPress={() => setIsPlaying(!isPlaying)}>
+                    <Text style={f.playBtnText}>{isPlaying ? '⏸️ หยุดเล่น' : '▶️ เล่นวิดีโอ'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={f.playBtn}
+                    onPress={() => setShowDailyTutorials((visible) => !visible)}
+                  >
+                    <Text style={f.playBtnText}>
+                      {showDailyTutorials ? '▲ ซ่อนบทเรียนย่อย' : '▼ ดู 4 บทเรียนย่อย'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              <View style={f.videoGrid}>
-                {filteredVideos.map((item) => {
-                  const isSelected = activeVideo.id === item.id;
-                  return (
-                    <TouchableOpacity
-                      key={item.id}
-                      style={[f.videoMiniCard, isSelected && f.videoMiniCardActive]}
-                      onPress={() => handleSelectVideo(item)}
-                    >
-                      <View style={f.videoMiniTop}>
-                        <Text style={{ fontSize: 22 }}>{item.icon}</Text>
-                        <Text style={f.videoMiniDur}>{item.duration}</Text>
-                      </View>
-                      <Text style={f.videoMiniTitle} numberOfLines={2}>{item.title}</Text>
-                      <Text style={f.videoMiniDesc} numberOfLines={2}>{item.desc}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+              {(showDailyTutorials || searchQuery.trim()) && (
+                <View style={f.videoGrid}>
+                  {filteredVideos.map((item) => {
+                    const isSelected = activeVideo.id === item.id;
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        style={[f.videoMiniCard, isSelected && f.videoMiniCardActive]}
+                        onPress={() => handleSelectVideo(item)}
+                      >
+                        <View style={f.videoMiniTop}>
+                          <Text style={{ fontSize: 22 }}>{item.icon}</Text>
+                          <Text style={f.videoMiniDur}>{item.duration}</Text>
+                        </View>
+                        <Text style={f.videoMiniTitle} numberOfLines={2}>{item.title}</Text>
+                        <Text style={f.videoMiniDesc} numberOfLines={2}>{item.desc}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
             </View>
           </>
         )}
