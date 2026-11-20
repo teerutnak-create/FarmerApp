@@ -1,5 +1,5 @@
 diff --git a/node_modules/@react-native-voice/voice/android/build.gradle b/node_modules/@react-native-voice/voice/android/build.gradle
-index 8fce879..18299dc 100644
+index 8fce879..bcd59e1 100644
 --- a/node_modules/@react-native-voice/voice/android/build.gradle
 +++ b/node_modules/@react-native-voice/voice/android/build.gradle
 @@ -1,67 +1,31 @@
@@ -84,25 +84,16 @@ index 8fce879..18299dc 100644
 +    implementation "com.facebook.react:react-android"
 +    implementation "androidx.annotation:annotation:1.9.1"
  }
-\ No newline at end of file
 diff --git a/node_modules/@react-native-voice/voice/android/src/main/AndroidManifest.xml b/node_modules/@react-native-voice/voice/android/src/main/AndroidManifest.xml
-index 9a75230..9a40fe1 100644
+index 9a75230..0bbc6c3 100644
 --- a/node_modules/@react-native-voice/voice/android/src/main/AndroidManifest.xml
 +++ b/node_modules/@react-native-voice/voice/android/src/main/AndroidManifest.xml
-@@ -1,5 +1,4 @@
- <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+@@ -2 +1,0 @@
 -    package="com.wenkesj.voice"
-     xmlns:tools="http://schemas.android.com/tools">
- 
-     <uses-sdk tools:overrideLibrary="com.facebook.react" />
-diff --git a/node_modules/@react-native-voice/voice/example/android/.gradle/5.5/fileChanges/last-build.bin b/node_modules/@react-native-voice/voice/example/android/.gradle/5.5/fileChanges/last-build.bin
-new file mode 100644
-index 0000000..f76dd23
-Binary files /dev/null and b/node_modules/@react-native-voice/voice/example/android/.gradle/5.5/fileChanges/last-build.bin differ
-diff --git a/node_modules/@react-native-voice/voice/example/android/.gradle/5.5/fileHashes/fileHashes.lock b/node_modules/@react-native-voice/voice/example/android/.gradle/5.5/fileHashes/fileHashes.lock
-new file mode 100644
-index 0000000..f69fd5b
-Binary files /dev/null and b/node_modules/@react-native-voice/voice/example/android/.gradle/5.5/fileHashes/fileHashes.lock differ
-diff --git a/node_modules/@react-native-voice/voice/example/android/.gradle/5.5/gc.properties b/node_modules/@react-native-voice/voice/example/android/.gradle/5.5/gc.properties
-new file mode 100644
-index 0000000..e69de29
+diff --git a/node_modules/@react-native-voice/voice/android/src/main/java/com/wenkesj/voice/VoiceModule.java b/node_modules/@react-native-voice/voice/android/src/main/java/com/wenkesj/voice/VoiceModule.java
+index f22833e..b1d10b1 100644
+--- a/node_modules/@react-native-voice/voice/android/src/main/java/com/wenkesj/voice/VoiceModule.java
++++ b/node_modules/@react-native-voice/voice/android/src/main/java/com/wenkesj/voice/VoiceModule.java
+@@ -149 +149 @@
+-    return "RCTVoice";
++    return "Voice";
