@@ -76,18 +76,12 @@ export function SharedTabContent({
         ]
       : [
           {
-            id: '1',
-            sender: 'คุณลุงสมหมาย',
+            id: 'welcome',
+            sender: 'ผู้ช่วย AI',
             isMe: false,
-            text: 'สวัสดีครับเจ้าหน้าที่ วันศุกร์นี้ผมพร้อมให้ลงตรวจแปลงแล้วครับ',
+            role: 'assistant',
+            text: 'สวัสดีครับ ผมเป็นผู้ช่วย AI สำหรับเจ้าหน้าที่ ถามเรื่องการตรวจแปลง มาตรฐาน GAP หรือการจัดการข้าวได้เลยครับ',
             time: '09:30',
-          },
-          {
-            id: '2',
-            sender: 'ฉัน',
-            isMe: true,
-            text: 'รับทราบครับ เดี๋ยวเจอกันเวลา 09.00 น. ที่แปลงนะครับ',
-            time: '09:32',
           },
         ]
   );
@@ -110,8 +104,6 @@ export function SharedTabContent({
     };
     setMessages((current) => [...current, userMessage]);
     setChatInput('');
-
-    if (role !== 'farmer') return;
 
     setChatLoading(true);
     try {
@@ -163,10 +155,10 @@ export function SharedTabContent({
       <View style={st.chatContainer}>
         <View style={st.chatHeader}>
           <Text style={[st.sectionTitle, { marginBottom: 0, fontSize: fs(14) }]}>
-            💬 {role === 'farmer' ? 'ห้องปรึกษา AI เกษตร' : 'ห้องแชทติดต่อเกษตรกร'}
+            💬 {role === 'farmer' ? 'ห้องปรึกษา AI เกษตร' : 'ผู้ช่วย AI สำหรับเจ้าหน้าที่'}
           </Text>
           <Text style={{ fontSize: 11, color: '#2e7d32' }}>
-            {role === 'farmer' ? '● AI พร้อมให้คำปรึกษา' : '● ออนไลน์'}
+            ● AI พร้อมให้คำปรึกษา
           </Text>
         </View>
 
@@ -196,7 +188,7 @@ export function SharedTabContent({
               </Text>
             </View>
           ))}
-          {role === 'farmer' && chatLoading && (
+          {chatLoading && (
             <View style={[st.chatBubble, st.chatOther]}>
               <Text style={st.chatSender}>ผู้ช่วย AI</Text>
               <Text style={[st.chatText, { fontSize: fs(13) }]}>กำลังคิดคำตอบ...</Text>
@@ -207,7 +199,7 @@ export function SharedTabContent({
         <View style={st.chatInputRow}>
           <TextInput
             style={st.chatInput}
-            placeholder={role === 'farmer' ? 'พิมพ์คำถามถึงผู้ช่วย AI...' : 'พิมพ์ข้อความที่นี่...'}
+            placeholder="พิมพ์คำถามถึงผู้ช่วย AI..."
             placeholderTextColor="#9ca3af"
             value={chatInput}
             onChangeText={setChatInput}
