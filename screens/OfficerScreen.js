@@ -42,6 +42,41 @@ const SAMPLE_MAP_FARMERS = [
   },
 ];
 
+const AUDIT_MODULES = [
+  {
+    key: 'gap',
+    icon: '📋',
+    title: 'ประเมินมาตรฐาน GAP',
+    subtitle: 'ตรวจเช็ก 5 หมวดมาตรฐาน & ออกรหัสล็อต QR',
+    badgeBg: '#dcfce7',
+    accent: '#15803d',
+  },
+  {
+    key: 'gis',
+    icon: '🗺️',
+    title: 'แผนที่ GIS & GPS Polygon',
+    subtitle: 'ปักหมุดแปลงและวาดขอบเขตพื้นที่เพาะปลูก',
+    badgeBg: '#e0f2fe',
+    accent: '#0369a1',
+  },
+  {
+    key: 'ai',
+    icon: '🔬',
+    title: 'สแกนโรคพืช AI Scanner',
+    subtitle: 'วิเคราะห์ภาพใบ/ลำต้นและเก็บประวัติรายแปลง',
+    badgeBg: '#fef3c7',
+    accent: '#b45309',
+  },
+  {
+    key: 'sensor',
+    icon: '📡',
+    title: 'IoT & สภาพอากาศเรียลไทม์',
+    subtitle: 'ดึงอุณหภูมิ แสงแดด ฝนจริง + ความชื้นดิน',
+    badgeBg: '#ede9fe',
+    accent: '#6d28d9',
+  },
+];
+
 function getAgeFromDob(dob) {
   if (typeof dob !== 'string') return null;
   const parts = dob.split('/').map(Number);
@@ -99,7 +134,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
   const [searchQuery, setSearchQuery] = useState('');
   const [homeTab, setHomeTab] = useState('all'); // 'all' | 'map' | 'farmers'
   const [bottomTab, setBottomTab] = useState('home');
-  const [auditTab, setAuditTab] = useState('gap');
+  const [auditTab, setAuditTab] = useState(null); // null = แสดงเมนูแนวตั้ง 4 รายการก่อนเลือก
   const [selectedFarmer, setSelectedFarmer] = useState(null);
   const [registeredFarmers, setRegisteredFarmers] = useState([]);
   const [farmLocations, setFarmLocations] = useState({});
@@ -212,6 +247,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
   const [aiLoading, setAiLoading] = useState(false);
   const [btConnected, setBtConnected] = useState(false);
   const [sensorData, setSensorData] = useState({ moisture: '--', temp: '--', sunlight: '--', rain: '--' });
+  const [sensorLoading, setSensorLoading] = useState(false);
 
   // GAP Checklist
   const [gapItems, setGapItems] = useState([
@@ -227,9 +263,9 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
   const handleExportPDF = () => {
     if (Platform.OS === 'web') {
       const printWindow = window.open('', '_blank');
-      const farmers = usersForDisplay.filter(u => u.role === 'farmer');
+      const farmers = usersForDisplay.filter((u) => u.role === 'farmer');
 
-      let htmlContent = `
+      const htmlContent = `
         <html>
           <head>
             <title>รายงานการบันทึกกิจกรรมเกษตรกร - ต.ผักไหม</title>
@@ -266,8 +302,8 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
                 </tr>
               </thead>
               <tbody>
-                ${logs && logs.length > 0 ? logs.map(l => {
-                  const farmer = farmers.find(f => f.id === l.farmerId);
+                ${logs && logs.length > 0 ? logs.map((l) => {
+                  const farmer = farmers.find((f) => f.id === l.farmerId);
                   return `
                     <tr>
                       <td>${new Date(l.time).toLocaleString('th-TH')}</td>
@@ -304,18 +340,17 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
         <View style={{ flex: 1.5, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
             <Text style={{ fontSize: 12, marginRight: 6 }}>{hasValue ? '✅' : '❌'}</Text>
-            <Text style={{ 
-              fontSize: 12, 
-              color: hasValue ? '#1e293b' : '#94a3b8', 
-              textDecorationLine: hasValue ? 'none' : 'line-through' 
+            <Text style={{
+              fontSize: 12,
+              color: hasValue ? '#1e293b' : '#94a3b8',
+              textDecorationLine: hasValue ? 'none' : 'line-through',
             }}>
               {hasValue ? value : 'ไม่ได้ระบุข้อมูล'}
             </Text>
           </View>
 
-          {/* 🟢 ปุ่มเลือกลบเฉพาะกิจกรรมย่อย */}
           {hasValue && onRemoveField && (
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={onRemoveField}
               style={{ backgroundColor: '#fee2e2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 4 }}
             >
@@ -337,6 +372,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
       (farmer.login && farmer.login.toLowerCase().includes(q))
     );
   });
+
   const latestLocations = { ...farmLocations };
   for (const log of logs || []) {
     if (
@@ -445,7 +481,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
 
   const checkFarmerCompleteness = (farmerId) => {
     const farmerLogs = logs ? logs.filter((l) => l.farmerId === farmerId) : [];
-    
+
     const hasActivity = farmerLogs.some((l) => l.category === 'ACTIVITY' || l.type === 'บันทึกรายวัน' || l.type === 'บันทึกกิจกรรมประจำวัน' || l.activity || l.water || l.fertilizer);
     const hasMoisture = farmerLogs.some((l) => l.category === 'SENSOR' || l.type === 'วัดความชื้น' || l.moisture !== undefined);
     const hasPhoto = farmerLogs.some((l) => l.type === 'ถ่ายรูปแปลง' || l.photoUri);
@@ -463,7 +499,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
   const handleSelectFarmer = (farmer) => {
     setSelectedFarmer(farmer);
     setCurrentPage('audit');
-    setAuditTab('gap');
+    setAuditTab(null); // แสดงเมนูแนวตั้งให้เลือกก่อน
   };
 
   const handleOpenAddLog = (farmer) => {
@@ -473,7 +509,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
   };
 
   const handleOpenEditLog = (logItem) => {
-    const logOwner = farmersList.find(f => f.id === logItem.farmerId) || { id: logItem.farmerId, name: logItem.farmerId };
+    const logOwner = farmersList.find((f) => f.id === logItem.farmerId) || { id: logItem.farmerId, name: logItem.farmerId };
     setTargetFarmerForAdd(logOwner);
     setEditingLogData(logItem);
     setShowReportModal(false);
@@ -492,7 +528,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
     } else {
       Alert.alert('ยืนยันการลบ', 'คุณต้องการลบบันทึกรายการนี้ใช่หรือไม่?', [
         { text: 'ยกเลิก', style: 'cancel' },
-        { text: 'ลบทิ้ง', onPress: doDelete, style: 'destructive' }
+        { text: 'ลบทิ้ง', onPress: doDelete, style: 'destructive' },
       ]);
     }
   };
@@ -506,7 +542,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
     } else {
       Alert.alert('ยืนยันการลบกิจกรรม', `คุณต้องการลบกิจกรรม "${fieldName}" หรือไม่?`, [
         { text: 'ยกเลิก', style: 'cancel' },
-        { text: 'ลบกิจกรรม', onPress: () => { if (onDeleteActivityField) onDeleteActivityField(logId, fieldKey); setShowReportModal(false); }, style: 'destructive' }
+        { text: 'ลบกิจกรรม', onPress: () => { if (onDeleteActivityField) onDeleteActivityField(logId, fieldKey); setShowReportModal(false); }, style: 'destructive' },
       ]);
     }
   };
@@ -525,13 +561,6 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
   const toggleGap = (id) => {
     setGapItems(gapItems.map((item) => (item.id === id ? { ...item, checked: !item.checked } : item)));
   };
-
-  const handleCaptureGIS = () => {
-    setGpsConnected(true);
-    showAlert('ดึงพิกัดสำเร็จ 📍', 'GPS High-Precision (±1.5m)');
-  };
-
-  const [sensorLoading, setSensorLoading] = useState(false);
 
   const handleConnectBluetooth = async () => {
     setSensorLoading(true);
@@ -601,13 +630,13 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
 
     let pickerResult = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true, 
-      aspect: [1, 1], 
+      allowsEditing: true,
+      aspect: [1, 1],
       quality: 0.8,
     });
 
     if (pickerResult.canceled) {
-      return; 
+      return;
     }
 
     const realImageUri = pickerResult.assets[0].uri;
@@ -633,7 +662,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
       });
 
       const result = await res.json();
-      
+
       if (res.ok) {
         const now = new Date();
         const timeString = now.toLocaleString('th-TH');
@@ -642,7 +671,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
           id: Date.now().toString(),
           image: realImageUri,
           result: result,
-          timestamp: timeString
+          timestamp: timeString,
         };
 
         setAiHistory((prevHistory) => {
@@ -650,7 +679,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
           const existingHistory = prevHistory[currentFarmerId] || [];
           return {
             ...prevHistory,
-            [currentFarmerId]: [newRecord, ...existingHistory]
+            [currentFarmerId]: [newRecord, ...existingHistory],
           };
         });
       } else {
@@ -691,508 +720,605 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
 
   return (
     <SafeAreaView style={o.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#2e7d32" />
+      <StatusBar barStyle="light-content" backgroundColor="#166534" />
 
       <View style={o.mainLayout}>
-        {/* 🟢 Top Header Bar */}
-        <View style={o.topHeader}>
-          <View style={o.logoBadge}>
-            <Text style={{ fontSize: 18 }}>🛡️</Text>
-          </View>
-          <View style={o.searchPill}>
-            <Text style={{ fontSize: 14, marginRight: 6 }}>🔍</Text>
-            <TextInput
-              style={o.searchInput}
-              placeholder="ค้นหาชื่อ, รหัส หรือเบอร์เกษตรกร..."
-              placeholderTextColor="#78909c"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-          </View>
-          <TouchableOpacity style={o.headerIconBtn} onPress={onLogout}>
-            <Text style={{ fontSize: 16 }}>🚪</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* หน้าหลัก */}
         {currentPage === 'home' ? (
           bottomTab !== 'home' ? (
-            
-       <SharedTabContent
-         activeTab={bottomTab}
-         user={user}
-         role="officer"
-         logs={logs}
-         onLogout={onLogout}
-       />
-     ) : (
-          <ScrollView contentContainerStyle={o.container} showsVerticalScrollIndicator={false}>
-            
-            {/* 🟢 Hero Banner เจ้าหน้าที่ */}
-            <View style={o.heroBanner}>
-              <View style={o.heroTopRow}>
-                <View style={o.heroTag}>
-                  <Text style={o.heroTagText}>FIELD OFFICER SUITE v4.0</Text>
-                </View>
-                <View style={o.heroTagRight}>
-                  <Text style={o.heroTagText}>● ออนไลน์</Text>
-                </View>
-              </View>
-
-              <Text style={o.heroGreeting}>เจ้าหน้าที่สมศรี (OFF-2026-0089)</Text>
-              <Text style={o.heroSub}>ตำแหน่ง: Senior GAP Auditor (Level 2)</Text>
-
-              <View style={o.heroStatsRow}>
-                <View style={o.heroStatPill}>
-                  <Text style={o.heroStatLabel}>เกษตรกร</Text>
-                  <Text style={o.heroStatVal}>{farmersList.length} คน</Text>
-                </View>
-                <View style={o.heroStatPill}>
-                  <Text style={o.heroStatLabel}>บันทึกรวม</Text>
-                  <Text style={o.heroStatVal}>{logs ? logs.length : 0} รายการ</Text>
-                </View>
-                <View style={o.heroStatPill}>
-                  <Text style={o.heroStatLabel}>พิกัด GPS</Text>
-                  <Text style={o.heroStatVal}>{mapFarmersWithLocations.length} จุด</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* 🟢 เมนูไอคอน 4 คอลัมน์ */}
-            <View style={o.gridCard}>
-              <View style={o.iconGrid}>
-                {[
-                  { key: 'pdf', icon: '📄', label: 'ออก PDF', bg: '#e0f2fe', onPress: handleExportPDF },
-                  { key: 'manage', icon: '⚙️', label: 'จัดการข้อมูล', bg: '#f1f5f9', onPress: () => setShowManageModal(true) },
-                  { key: 'sync', icon: '🔄', label: 'ซิงก์ข้อมูล', bg: '#e8f5e9', onPress: onRefresh },
-                  { key: 'map', icon: '🗺️', label: 'แผนที่ GPS', bg: '#f1f8e9', onPress: () => setHomeTab(homeTab === 'map' ? 'all' : 'map') },
-                ].map((item) => (
-                  <TouchableOpacity key={item.key} style={o.iconGridItem} onPress={item.onPress}>
-                    <View style={[o.iconCircle, { backgroundColor: item.bg }]}>
-                      <Text style={o.iconEmoji}>{item.icon}</Text>
+            <SharedTabContent
+              activeTab={bottomTab}
+              user={user}
+              role="officer"
+              logs={logs}
+              onLogout={onLogout}
+            />
+          ) : (
+            <ScrollView contentContainerStyle={o.minimalScrollContent} showsVerticalScrollIndicator={false}>
+              {/* 🟢 ส่วนหัวสีเขียวโค้งมนด้านล่าง (สไตล์รูป 4) + ค้นหา */}
+              <View style={o.heroCurveHeader}>
+                <View style={o.heroTopBar}>
+                  <View style={o.heroBadgeRow}>
+                    <Text style={o.heroBadgeText}>🌿 FIELD OFFICER</Text>
+                    <View style={o.onlinePill}>
+                      <Text style={o.onlinePillText}>● ออนไลน์</Text>
                     </View>
-                    <Text style={o.iconLabel} numberOfLines={1}>{item.label}</Text>
+                  </View>
+                  <TouchableOpacity style={o.logoutPillBtn} onPress={onLogout}>
+                    <Text style={o.logoutPillText}>ออกจากระบบ 🚪</Text>
                   </TouchableOpacity>
-                ))}
+                </View>
+
+                <Text style={o.heroTitle}>เจ้าหน้าที่สมศรี</Text>
+                <Text style={o.heroSubtitle}>OFF-2026-0089 · Senior GAP Auditor</Text>
+
+                <View style={o.searchBoxMinimal}>
+                  <Text style={{ fontSize: 14, marginRight: 8 }}>🔍</Text>
+                  <TextInput
+                    style={o.searchInputMinimal}
+                    placeholder="ค้นหาชื่อ, รหัส หรือเบอร์เกษตรกร..."
+                    placeholderTextColor="#64748b"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                  />
+                </View>
               </View>
-            </View>
 
-            {/* 🟢 เส้นคั่นหัวข้อกลาง */}
-            <View style={o.sectionDividerRow}>
-              <View style={o.dividerLine} />
-              <Text style={o.sectionDividerText}>
-                {homeTab === 'map' ? 'แผนที่พิกัดแปลง' : homeTab === 'farmers' ? 'รายชื่อเกษตรกร' : 'ภาพรวมพื้นที่และเกษตรกร'}
-              </Text>
-              <View style={o.dividerLine} />
-            </View>
+              {/* 🟢 การ์ดสรุปและเมนูลัดมินิมอลซ้อนทับด้านล่างส่วนหัว (สไตล์รูป 2 & 4) */}
+              <View style={o.floatingSummaryCard}>
+                <View style={o.summaryStatsRow}>
+                  <View style={o.summaryStatCol}>
+                    <Text style={o.summaryStatNum}>{farmersList.length}</Text>
+                    <Text style={o.summaryStatLabel}>เกษตรกร</Text>
+                  </View>
+                  <View style={o.summaryDividerVert} />
+                  <View style={o.summaryStatCol}>
+                    <Text style={o.summaryStatNum}>{logs ? logs.length : 0}</Text>
+                    <Text style={o.summaryStatLabel}>บันทึกรวม</Text>
+                  </View>
+                  <View style={o.summaryDividerVert} />
+                  <View style={o.summaryStatCol}>
+                    <Text style={o.summaryStatNum}>{mapFarmersWithLocations.length}</Text>
+                    <Text style={o.summaryStatLabel}>พิกัด GPS</Text>
+                  </View>
+                </View>
 
-            {/* 🟢 เริ่มครอบการ์ดแผนที่ */}
-            {(homeTab === 'all' || homeTab === 'map') && (
-            <View style={o.sectionCard}>
-
-              <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1b5e20', marginTop: 12, marginBottom: 6 }}>
-                🗺️ พิกัดแปลงเกษตรกรในพื้นที่ ต.ผักไหม:
-              </Text>
-              <Text style={{ fontSize: 10, color: '#7c3aed', marginBottom: 6 }}>
-                หมุดตัวอย่างอยู่แถว ต.ผักไหม อ.ศีขรภูมิ จ.สุรินทร์ เป็นพิกัดสมมติ ไม่ใช่ GPS จริง
-              </Text>
-              <View style={o.mapSimContainer}>
-                {mapFarmersWithLocations.length === 0 ? (
-                  <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: 'bold', textAlign: 'center', padding: 12 }}>
-                    ยังไม่มีรูปถ่ายแปลงที่บันทึกพิกัด GPS
-                  </Text>
-                ) : Platform.OS === 'web' ? (
-                  <div style={{ height: '100%', width: '100%' }}>
-                    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-                    <MapContainer
-                      key={mapKey}
-                      center={[focusedMapCenter.latitude, focusedMapCenter.longitude]}
-                      zoom={focusedMapZoom}
-                      style={{ height: '100%', width: '100%' }}
-                    >
-                      <TileLayer
-                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                      />
-                      {mapFarmersWithLocations.map(({ farmer, location }) => {
-                        const isVisited = Boolean(fieldVisits[farmer.id]?.visitedAt);
-                        return (
-                          <MarkerWeb
-                            key={farmer.id}
-                            position={[location.lat, location.lng]}
-                            title={`${farmer.name} · ${farmer.isSample ? 'พิกัดตัวอย่าง · ' : ''}${isVisited ? 'ลงพื้นที่แล้ว' : 'ยังไม่ลงพื้นที่'}`}
-                            eventHandlers={{ click: () => handleSelectMapFarmer(farmer, location) }}
-                          />
-                        );
-                      })}
-                    </MapContainer>
-                  </div>
-                ) : (
-                  <MapView
-                    key={mapKey}
-                    style={{ flex: 1 }}
-                    initialRegion={{
-                      ...focusedMapCenter,
-                      latitudeDelta: focusedLatitudeDelta,
-                      longitudeDelta: focusedLongitudeDelta,
-                    }}
-                  >
-                    {mapFarmersWithLocations.map(({ farmer, location }) => {
-                      const isVisited = Boolean(fieldVisits[farmer.id]?.visitedAt);
-                      return (
-                        <Marker
-                          key={farmer.id}
-                          coordinate={{ latitude: location.lat, longitude: location.lng }}
-                          pinColor={isVisited ? 'green' : farmer.isSample ? 'purple' : 'orange'}
-                          title={`คุณ${farmer.name}`}
-                          description={`${farmer.isSample ? 'พิกัดตัวอย่าง · ' : ''}${isVisited ? 'ลงพื้นที่แล้ว' : 'ยังไม่ลงพื้นที่'}`}
-                          onPress={() => handleSelectMapFarmer(farmer, location)}
-                        />
-                      );
-                    })}
-                  </MapView>
-                )}
-              </View>
-              <View style={o.mapLocationNotice}>
-                <Text style={{ fontSize: 10, color: '#6d28d9', fontWeight: 'bold', marginBottom: 5 }}>
-                  รายชื่อที่มีพิกัด (กดชื่อเพื่อไปยังหมุด; รายการตัวอย่างไม่ใช่ GPS จริง):
-                </Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
-                  {mapFarmersWithLocations.map(({ farmer, location }) => (
-                    <TouchableOpacity
-                      key={farmer.id}
-                      style={o.mapLocationTag}
-                      onPress={() => handleSelectMapFarmer(farmer, location)}
-                    >
-                      <Text style={{ fontSize: 10, color: farmer.isSample ? '#6d28d9' : '#166534' }}>
-                        {farmer.name}: {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
-                        {farmer.isSample ? ' (ตัวอย่าง)' : ''}
-                      </Text>
+                <View style={o.quickActionRow}>
+                  {[
+                    { key: 'pdf', icon: '📄', label: 'ออก PDF', bg: '#dcfce7', onPress: handleExportPDF },
+                    { key: 'manage', icon: '⚙️', label: 'จัดการ', bg: '#e0f2fe', onPress: () => setShowManageModal(true) },
+                    { key: 'sync', icon: '🔄', label: 'ซิงก์', bg: '#fef3c7', onPress: onRefresh },
+                    { key: 'map', icon: '🗺️', label: homeTab === 'map' ? 'ทั้งหมด' : 'แผนที่', bg: '#ede9fe', onPress: () => setHomeTab(homeTab === 'map' ? 'all' : 'map') },
+                  ].map((item) => (
+                    <TouchableOpacity key={item.key} style={o.quickActionItem} onPress={item.onPress}>
+                      <View style={[o.quickActionIconBox, { backgroundColor: item.bg }]}>
+                        <Text style={{ fontSize: 18 }}>{item.icon}</Text>
+                      </View>
+                      <Text style={o.quickActionLabel} numberOfLines={1}>{item.label}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
-              {farmersWithoutLocations.length > 0 && (
-                <View style={o.mapLocationNotice}>
-                  <Text style={{ fontSize: 10, color: '#795548', fontWeight: 'bold', marginBottom: 5 }}>
-                    ยังไม่มีพิกัดจากรูปถ่าย GPS:
-                  </Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
-                    {farmersWithoutLocations.map((farmer) => (
-                      <TouchableOpacity
-                        key={farmer.id}
-                        style={o.mapLocationTag}
-                        onPress={() => setSelectedMapFarmer(farmer)}
-                      >
-                        <Text style={{ fontSize: 10, color: '#795548' }}>{farmer.name}</Text>
-                      </TouchableOpacity>
-                    ))}
+
+              {/* 🟢 การ์ดแผนที่พิกัดแปลง */}
+              {(homeTab === 'all' || homeTab === 'map') && (
+                <View style={o.minimalCard}>
+                  <View style={o.cardRowBetween}>
+                    <View style={o.cardTitleGroup}>
+                      <View style={[o.miniIconBadge, { backgroundColor: '#dcfce7' }]}>
+                        <Text style={{ fontSize: 14 }}>🗺️</Text>
+                      </View>
+                      <View>
+                        <Text style={o.minimalCardTitle}>พิกัดแปลง ต.ผักไหม</Text>
+                        <Text style={o.minimalCardSub}>หมุดตัวอย่างไม่ใช่ GPS จริง · กดที่หมุดหรือชื่อเพื่อดู</Text>
+                      </View>
+                    </View>
                   </View>
-                </View>
-              )}
-            </View>
-            )}
 
-            {/* รายชื่อเกษตรกร */}
-            {(homeTab === 'all' || homeTab === 'farmers') && (
-            <View style={o.sectionCard}>
-              <View style={o.cardHeader}>
-                <Text style={o.sectionTitle}>👨‍🌾 รายชื่อเกษตรกร & ความครบถ้วนของข้อมูล</Text>
-                <Text style={o.badge}>{farmersList.length} รายการ</Text>
-              </View>
-
-              {filteredFarmersList.map((farmer) => {
-                const check = checkFarmerCompleteness(farmer.id);
-                const farmerLogs = logs ? logs.filter((l) => l.farmerId === farmer.id) : [];
-                
-                // 🟢 ดึงรายการบันทึกสูงสุด 3 รายการล่าสุด
-                const recentLogs = farmerLogs.slice(0, 3);
-
-                return (
-                  <View key={farmer.id} style={o.queueItem}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={o.queueCode}>ID: {farmer.id}</Text>
-                      <Text style={{ color: check.isComplete ? '#2e7d32' : '#d97706', fontSize: 11, fontWeight: 'bold' }}>
-                        {check.isComplete ? '✅ ข้อมูลครบถ้วน' : '⚠️ ข้อมูลยังไม่ครบ'}
+                  <View style={[o.mapSimContainer, { marginTop: 10 }]}>
+                    {mapFarmersWithLocations.length === 0 ? (
+                      <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: 'bold', textAlign: 'center', padding: 12 }}>
+                        ยังไม่มีรูปถ่ายแปลงที่บันทึกพิกัด GPS
                       </Text>
+                    ) : Platform.OS === 'web' ? (
+                      <div style={{ height: '100%', width: '100%' }}>
+                        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                        <MapContainer
+                          key={mapKey}
+                          center={[focusedMapCenter.latitude, focusedMapCenter.longitude]}
+                          zoom={focusedMapZoom}
+                          style={{ height: '100%', width: '100%' }}
+                        >
+                          <TileLayer
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                          />
+                          {mapFarmersWithLocations.map(({ farmer, location }) => {
+                            const isVisited = Boolean(fieldVisits[farmer.id]?.visitedAt);
+                            return (
+                              <MarkerWeb
+                                key={farmer.id}
+                                position={[location.lat, location.lng]}
+                                title={`${farmer.name} · ${farmer.isSample ? 'พิกัดตัวอย่าง · ' : ''}${isVisited ? 'ลงพื้นที่แล้ว' : 'ยังไม่ลงพื้นที่'}`}
+                                eventHandlers={{ click: () => handleSelectMapFarmer(farmer, location) }}
+                              />
+                            );
+                          })}
+                        </MapContainer>
+                      </div>
+                    ) : (
+                      <MapView
+                        key={mapKey}
+                        style={{ flex: 1 }}
+                        initialRegion={{
+                          ...focusedMapCenter,
+                          latitudeDelta: focusedLatitudeDelta,
+                          longitudeDelta: focusedLongitudeDelta,
+                        }}
+                      >
+                        {mapFarmersWithLocations.map(({ farmer, location }) => {
+                          const isVisited = Boolean(fieldVisits[farmer.id]?.visitedAt);
+                          return (
+                            <Marker
+                              key={farmer.id}
+                              coordinate={{ latitude: location.lat, longitude: location.lng }}
+                              pinColor={isVisited ? 'green' : farmer.isSample ? 'purple' : 'orange'}
+                              title={`คุณ${farmer.name}`}
+                              description={`${farmer.isSample ? 'พิกัดตัวอย่าง · ' : ''}${isVisited ? 'ลงพื้นที่แล้ว' : 'ยังไม่ลงพื้นที่'}`}
+                              onPress={() => handleSelectMapFarmer(farmer, location)}
+                            />
+                          );
+                        })}
+                      </MapView>
+                    )}
+                  </View>
+
+                  <View style={o.mapLocationNotice}>
+                    <Text style={{ fontSize: 10, color: '#166534', fontWeight: 'bold', marginBottom: 5 }}>
+                      รายชื่อที่มีพิกัด (กดเพื่อโฟกัสหมุด):
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
+                      {mapFarmersWithLocations.map(({ farmer, location }) => (
+                        <TouchableOpacity
+                          key={farmer.id}
+                          style={o.mapLocationTag}
+                          onPress={() => handleSelectMapFarmer(farmer, location)}
+                        >
+                          <Text style={{ fontSize: 10, color: farmer.isSample ? '#4d7c0f' : '#15803d', fontWeight: '600' }}>
+                            {farmer.name}: {location.lat.toFixed(4)}, {location.lng.toFixed(4)}
+                            {farmer.isSample ? ' (ตัวอย่าง)' : ''}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
                     </View>
+                  </View>
 
-                    <Text style={o.queueName}>คุณ{farmer.name}</Text>
-                    <Text style={o.queueDesc}>เบอร์โทรศัพท์: {farmer.login} | อายุ: {farmer.age} ปี (เกิด {farmer.dob})</Text>
-
-                    <View style={o.checkStatusGroup}>
-                      <Text style={[o.checkBadge, { backgroundColor: check.hasActivity ? '#e8f5e9' : '#fee2e2', color: check.hasActivity ? '#2e7d32' : '#b91c1c' }]}>
-                        {check.hasActivity ? '✓ บันทึกกิจกรรม' : '✗ ขาดบันทึกกิจกรรม'}
+                  {farmersWithoutLocations.length > 0 && (
+                    <View style={[o.mapLocationNotice, { backgroundColor: '#f8fafc' }]}>
+                      <Text style={{ fontSize: 10, color: '#64748b', fontWeight: 'bold', marginBottom: 5 }}>
+                        ยังไม่มีพิกัดจากรูปถ่าย GPS:
                       </Text>
-                      <Text style={[o.checkBadge, { backgroundColor: check.hasMoisture ? '#e8f5e9' : '#fee2e2', color: check.hasMoisture ? '#2e7d32' : '#b91c1c' }]}>
-                        {check.hasMoisture ? '✓ วัดความชื้น' : '✗ ขาดวัดความชื้น'}
-                      </Text>
-                    </View>
-
-                    {/* 🟢 ส่วนแสดงรายการบันทึกล่าสุด สูงสุด 3 รายการ */}
-                    {recentLogs.length > 0 && (
-                      <View style={{ marginTop: 8, gap: 6 }}>
-                        {recentLogs.map((logItem, index) => (
-                          <View key={logItem.id || index} style={[o.lastLogBox, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
-                            <View style={{ flex: 1, paddingRight: 6 }}>
-                              <Text style={o.lastLogTitle}>📝 บันทึกล่าสุด ({index + 1}):</Text>
-                              <Text style={o.lastLogText}>
-                                {logItem.summary || logItem.activity || (logItem.moisture !== undefined ? `วัดความชื้น (${logItem.moisture}%)` : logItem.type)}
-                              </Text>
-                            </View>
-                            
-                            <TouchableOpacity 
-                              style={{ backgroundColor: '#e0f2fe', padding: 8, borderRadius: 8 }}
-                              onPress={() => {
-                                setSelectedLog({
-                                  isCombinedView: false,
-                                  farmerName: farmer.name,
-                                  time: logItem.time,
-                                  ...logItem,
-                                  activityLog: logItem
-                                });
-                                setShowReportModal(true);
-                              }}
-                            >
-                              <Text style={{ fontSize: 14 }}>👁️</Text>
-                            </TouchableOpacity>
-                          </View>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
+                        {farmersWithoutLocations.map((farmer) => (
+                          <TouchableOpacity
+                            key={farmer.id}
+                            style={[o.mapLocationTag, { backgroundColor: '#e2e8f0' }]}
+                            onPress={() => setSelectedMapFarmer(farmer)}
+                          >
+                            <Text style={{ fontSize: 10, color: '#475569' }}>{farmer.name}</Text>
+                          </TouchableOpacity>
                         ))}
                       </View>
-                    )}
-
-                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-                      <TouchableOpacity
-                        style={[o.actionBtn, { flex: 1, backgroundColor: '#0284c7' }]}
-                        onPress={() => handleOpenAddLog(farmer)}
-                      >
-                        <Text style={o.actionBtnText}>✏️ กรอกฟอร์มให้เกษตรกร</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[o.actionBtn, { flex: 1, backgroundColor: '#2e7d32' }]}
-                        onPress={() => handleSelectFarmer(farmer)}
-                      >
-                        <Text style={o.actionBtnText}>ตรวจประเมิน ➔</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-            )}
-            
-          </ScrollView>
-        )
-        ) : (
-          /* หน้าลงตรวจแปลง */
-          <View style={{ flex: 1 }}>
-            <View style={o.subHeader}>
-              <TouchableOpacity onPress={() => setCurrentPage('home')} style={o.backBtn}>
-                <Text style={o.backBtnText}>❮ กลับหน้าหลัก</Text>
-              </TouchableOpacity>
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>ตรวจแปลง: คุณ{selectedFarmer?.name}</Text>
-                <Text style={{ color: '#e8f5e9', fontSize: 10 }}>รหัสเกษตรกร: {selectedFarmer?.id} | เบอร์โทร: {selectedFarmer?.login}</Text>
-              </View>
-            </View>
-
-            <View style={o.auditTabNav}>
-              <TouchableOpacity style={[o.tabItem, auditTab === 'gap' && o.tabItemActive]} onPress={() => setAuditTab('gap')}>
-                <Text style={[o.tabText, auditTab === 'gap' && o.tabTextActive]}>📋 GAP</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[o.tabItem, auditTab === 'gis' && o.tabItemActive]} onPress={() => setAuditTab('gis')}>
-                <Text style={[o.tabText, auditTab === 'gis' && o.tabTextActive]}>🗺️ GIS</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[o.tabItem, auditTab === 'ai' && o.tabItemActive]} onPress={() => setAuditTab('ai')}>
-                <Text style={[o.tabText, auditTab === 'ai' && o.tabTextActive]}>🔬 AI สแกน</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[o.tabItem, auditTab === 'sensor' && o.tabItemActive]} onPress={() => setAuditTab('sensor')}>
-                <Text style={[o.tabText, auditTab === 'sensor' && o.tabTextActive]}>📡 IoT</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView contentContainerStyle={o.container} showsVerticalScrollIndicator={false}>
-              {auditTab === 'gap' && (
-                <View style={o.sectionCard}>
-                  <Text style={o.sectionTitle}>📋 ประเมินมาตรฐาน GAP - คุณ{selectedFarmer?.name}</Text>
-
-                  {gapItems.map((item) => (
-                    <View key={item.id} style={o.checkRow}>
-                      <Switch value={item.checked} onValueChange={() => toggleGap(item.id)} trackColor={{ true: '#4caf50' }} />
-                      <Text style={{ fontSize: 12, color: '#333', flex: 1, marginLeft: 8 }}>{item.title}</Text>
-                    </View>
-                  ))}
-
-                  <TouchableOpacity style={[o.bigBtn, { backgroundColor: '#2e7d32', marginTop: 14 }]} onPress={handleSubmitAudit}>
-                    <Text style={o.bigBtnText}>อนุมัติปล่อยล็อตสินค้า & ออก QR ➔</Text>
-                  </TouchableOpacity>
-
-                  {lotId !== '' && (
-                    <View style={o.qrBox}>
-                      <Text style={{ fontWeight: 'bold', color: '#1b5e20', marginBottom: 6 }}>
-                        ✅ อนุมัติสำเร็จ! Lot ID: {lotId}
-                      </Text>
-                      <Image
-                        source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://ผักไหม.com/trace/${lotId}` }}
-                        style={{ width: 120, height: 120, borderRadius: 8 }}
-                      />
                     </View>
                   )}
                 </View>
               )}
 
-              {auditTab === 'gis' && (
-                <View style={{ marginTop: 15, paddingHorizontal: 15 }}>
-                  <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10, color: '#2e7d32' }}>
-                    🗺️ ปักหมุด GIS & GPS Polygon
-                  </Text>
-                  
-                  <View style={{ height: 400, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#ddd' }}>
-                    {Platform.OS === 'web' ? (
-                      <div style={{ height: '100%', width: '100%' }}>
-                        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-                        <MapContainer center={[15.118624, 104.322015]} zoom={16} style={{ height: '100%', width: '100%' }}>
-                          <TileLayer
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                          />
-                          <MapClickHandler />
-                          
-                          {polygonPoints.map((point, index) => (
-                            <MarkerWeb key={index} position={[point.latitude, point.longitude]} />
-                          ))}
+              {/* 🟢 รายชื่อเกษตรกรแบบมินิมอล */}
+              {(homeTab === 'all' || homeTab === 'farmers') && (
+                <View style={o.minimalCard}>
+                  <View style={o.cardRowBetween}>
+                    <View style={o.cardTitleGroup}>
+                      <View style={[o.miniIconBadge, { backgroundColor: '#dcfce7' }]}>
+                        <Text style={{ fontSize: 14 }}>👨‍🌾</Text>
+                      </View>
+                      <View>
+                        <Text style={o.minimalCardTitle}>รายชื่อเกษตรกร</Text>
+                        <Text style={o.minimalCardSub}>ตรวจสอบความครบถ้วนและลงตรวจแปลง</Text>
+                      </View>
+                    </View>
+                    <View style={o.softGreenPill}>
+                      <Text style={o.softGreenPillText}>{filteredFarmersList.length} ราย</Text>
+                    </View>
+                  </View>
 
-                          {polygonPoints.length >= 3 && (
-                            <PolygonWeb
-                              positions={polygonPoints.map(p => [p.latitude, p.longitude])}
-                              pathOptions={{ fillColor: 'rgba(46, 125, 50, 0.4)', color: '#2e7d32', weight: 3 }}
-                            />
-                          )}
-                        </MapContainer>
-                      </div>
-                    ) : (
-                      <MapView
-                        style={{ flex: 1 }}
-                        initialRegion={{
-                          latitude: 15.118624,
-                          longitude: 104.322015,
-                          latitudeDelta: 0.005,
-                          longitudeDelta: 0.005,
-                        }}
-                        mapType="satellite"
-                        onPress={handleMapPress}
-                      >
-                        {polygonPoints.map((point, index) => (
-                          <Marker key={index} coordinate={point} pinColor="red" />
-                        ))}
+                  {filteredFarmersList.map((farmer) => {
+                    const check = checkFarmerCompleteness(farmer.id);
+                    const farmerLogs = logs ? logs.filter((l) => l.farmerId === farmer.id) : [];
+                    const recentLogs = farmerLogs.slice(0, 3);
 
-                        {polygonPoints.length >= 3 && (
-                          <Polygon
-                            coordinates={polygonPoints}
-                            fillColor="rgba(46, 125, 50, 0.4)"
-                            strokeColor="#2e7d32"
-                            strokeWidth={3}
-                          />
+                    return (
+                      <View key={farmer.id} style={o.farmerMinimalItem}>
+                        <View style={o.cardRowBetween}>
+                          <Text style={o.queueCode}>ID: {farmer.id}</Text>
+                          <View style={[
+                            o.statusChip,
+                            { backgroundColor: check.isComplete ? '#dcfce7' : '#fef3c7' },
+                          ]}>
+                            <Text style={{
+                              color: check.isComplete ? '#15803d' : '#b45309',
+                              fontSize: 10,
+                              fontWeight: 'bold',
+                            }}>
+                              {check.isComplete ? '✓ ครบถ้วน' : '• ยังไม่ครบ'}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <Text style={o.queueName}>คุณ{farmer.name}</Text>
+                        <Text style={o.queueDesc}>
+                          โทร {farmer.login} · {farmer.age} ปี ({farmer.dob})
+                        </Text>
+
+                        <View style={o.checkStatusGroup}>
+                          <Text style={[
+                            o.checkBadge,
+                            {
+                              backgroundColor: check.hasActivity ? '#f0fdf4' : '#fef2f2',
+                              color: check.hasActivity ? '#15803d' : '#b91c1c',
+                            },
+                          ]}>
+                            {check.hasActivity ? '✓ กิจกรรม' : '✗ ขาดกิจกรรม'}
+                          </Text>
+                          <Text style={[
+                            o.checkBadge,
+                            {
+                              backgroundColor: check.hasMoisture ? '#f0fdf4' : '#fef2f2',
+                              color: check.hasMoisture ? '#15803d' : '#b91c1c',
+                            },
+                          ]}>
+                            {check.hasMoisture ? '✓ ความชื้น' : '✗ ขาดความชื้น'}
+                          </Text>
+                        </View>
+
+                        {recentLogs.length > 0 && (
+                          <View style={{ marginTop: 8, gap: 6 }}>
+                            {recentLogs.map((logItem, index) => (
+                              <View
+                                key={logItem.id || index}
+                                style={[o.lastLogBox, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+                              >
+                                <View style={{ flex: 1, paddingRight: 6 }}>
+                                  <Text style={o.lastLogTitle}>บันทึกล่าสุด ({index + 1})</Text>
+                                  <Text style={o.lastLogText}>
+                                    {logItem.summary || logItem.activity || (logItem.moisture !== undefined ? `วัดความชื้น (${logItem.moisture}%)` : logItem.type)}
+                                  </Text>
+                                </View>
+
+                                <TouchableOpacity
+                                  style={o.eyeIconBtn}
+                                  onPress={() => {
+                                    setSelectedLog({
+                                      isCombinedView: false,
+                                      farmerName: farmer.name,
+                                      time: logItem.time,
+                                      ...logItem,
+                                      activityLog: logItem,
+                                    });
+                                    setShowReportModal(true);
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 13 }}>👁️</Text>
+                                </TouchableOpacity>
+                              </View>
+                            ))}
+                          </View>
                         )}
-                      </MapView>
-                    )}
-                  </View>
 
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 15, marginBottom: 20 }}>
-                    <TouchableOpacity 
-                      onPress={clearPolygon}
-                      style={{ padding: 12, backgroundColor: '#f44336', borderRadius: 8, flex: 1, marginRight: 5, alignItems: 'center' }}
-                    >
-                      <Text style={{ color: '#fff', fontWeight: 'bold' }}>ลบวาดใหม่</Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      onPress={() => alert(`บันทึกพิกัดทั้งหมด ${polygonPoints.length} จุดสำเร็จ!`)}
-                      style={{ padding: 12, backgroundColor: '#2e7d32', borderRadius: 8, flex: 1, marginLeft: 5, alignItems: 'center' }}
-                    >
-                      <Text style={{ color: '#fff', fontWeight: 'bold' }}>บันทึกพื้นที่แปลง</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                          <TouchableOpacity
+                            style={[o.pillBtnOutline, { flex: 1 }]}
+                            onPress={() => handleOpenAddLog(farmer)}
+                          >
+                            <Text style={o.pillBtnOutlineText}>✏️ กรอกฟอร์ม</Text>
+                          </TouchableOpacity>
 
-              {auditTab === 'ai' && (
-                <View style={o.sectionCard}>
-                  <Text style={o.sectionTitle}>🔬 สแกนโรคพืช AI Scanner</Text>
-                  <View style={o.scannerBox}>
-                    <Text style={{ fontSize: 36, marginBottom: 6 }}>📷</Text>
-                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1b5e20' }}>ถ่ายภาพใบหรือลำต้นผักไหม</Text>
-                    
-                    <TouchableOpacity 
-                      style={[o.bigBtn, { backgroundColor: '#388e3c', marginTop: 12, opacity: aiLoading ? 0.7 : 1 }]} 
-                      onPress={handleScanAI}
-                      disabled={aiLoading}
-                    >
-                      <Text style={o.bigBtnText}>{aiLoading ? 'กำลังวิเคราะห์ด้วย AI...' : 'เริ่มวิเคราะห์ด้วย AI'}</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {(aiHistory[selectedFarmer?.id] || []).map((item) => (
-                    <View key={item.id} style={[o.aiResultBox, { marginTop: 15 }]}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                        <Image source={{ uri: item.image }} style={{ width: 60, height: 60, borderRadius: 8, marginRight: 10 }} />
-                        <View>
-                          <Text style={{ fontSize: 11, color: '#666' }}>🕒 เวลาที่สแกน:</Text>
-                          <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#333' }}>{item.timestamp}</Text>
+                          <TouchableOpacity
+                            style={[o.pillBtnPrimary, { flex: 1 }]}
+                            onPress={() => handleSelectFarmer(farmer)}
+                          >
+                            <Text style={o.pillBtnPrimaryText}>ตรวจประเมิน ➔</Text>
+                          </TouchableOpacity>
                         </View>
                       </View>
-
-                      <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#2e7d32' }}>
-                        ✅ ผลการวิเคราะห์ AI (ความมั่นใจ {item.result.accuracy}):
-                      </Text>
-                      <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#b91c1c', marginTop: 6 }}>
-                        ตรวจพบ: {item.result.disease}
-                      </Text>
-                      <Text style={{ fontSize: 12, color: '#1f2937', marginTop: 4 }}>
-                        คำแนะนำ: {item.result.advice}
-                      </Text>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </View>
               )}
+            </ScrollView>
+          )
+        ) : (
+          /* 🟢 หน้าลงตรวจแปลง: เมนูแนวตั้ง 4 รายการ (GAP, GIS, AI สแกน, IoT) สไตล์มินิมอลธีมสีเขียว */
+          <View style={{ flex: 1, backgroundColor: '#f4f9f5' }}>
+            <View style={o.auditTopHeader}>
+              <TouchableOpacity
+                onPress={() => {
+                  if (auditTab) {
+                    setAuditTab(null);
+                  } else {
+                    setCurrentPage('home');
+                  }
+                }}
+                style={o.auditBackPill}
+              >
+                <Text style={o.auditBackPillText}>
+                  {auditTab ? '❮ เลือกหมวด' : '❮ หน้าหลัก'}
+                </Text>
+              </TouchableOpacity>
 
-              {auditTab === 'sensor' && (
-                <View style={o.sectionCard}>
-                  <Text style={o.sectionTitle}>📡 IoT Soil & Environment Reader</Text>
-                  <View style={o.darkBox}>
-                    <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
-                      <View style={o.sensorMetric}>
-                        <Text style={{ color: '#c8e6c9', fontSize: 11 }}>ความชื้นดิน</Text>
-                        <Text style={{ color: '#81c784', fontSize: 20, fontWeight: 'bold' }}>{sensorData.moisture} %</Text>
-                      </View>
-                      <View style={o.sensorMetric}>
-                        <Text style={{ color: '#c8e6c9', fontSize: 11 }}>อุณหภูมิ</Text>
-                        <Text style={{ color: '#fbbf24', fontSize: 20, fontWeight: 'bold' }}>{sensorData.temp} °C</Text>
-                      </View>
-                    </View>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={o.auditHeaderTitle} numberOfLines={1}>
+                  ตรวจแปลง · คุณ{selectedFarmer?.name}
+                </Text>
+                <Text style={o.auditHeaderSub} numberOfLines={1}>
+                  ID: {selectedFarmer?.id} · โทร {selectedFarmer?.login || '-'}
+                </Text>
+              </View>
+            </View>
 
-                    <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
-                      <View style={o.sensorMetric}>
-                        <Text style={{ color: '#c8e6c9', fontSize: 11 }}>แสงแดด</Text>
-                        <Text style={{ color: '#60a5fa', fontSize: 20, fontWeight: 'bold' }}>{sensorData.sunlight} lux</Text>
-                      </View>
-                      <View style={o.sensorMetric}>
-                        <Text style={{ color: '#c8e6c9', fontSize: 11 }}>ปริมาณน้ำฝน</Text>
-                        <Text style={{ color: '#a78bfa', fontSize: 20, fontWeight: 'bold' }}>{sensorData.rain} mm</Text>
-                      </View>
-                    </View>
+            <ScrollView contentContainerStyle={o.minimalScrollContent} showsVerticalScrollIndicator={false}>
+              {/* รายการแนวตั้งให้เลือก 4 หมวด */}
+              {!auditTab ? (
+                <View style={o.verticalMenuWrapper}>
+                  <View style={o.verticalMenuBanner}>
+                    <Text style={o.verticalMenuBannerTitle}>เลือกหัวข้อการตรวจประเมิน</Text>
+                    <Text style={o.verticalMenuBannerSub}>
+                      แตะเลือก 1 รายการด้านล่างเพื่อเปิดเครื่องมือตรวจแปลง
+                    </Text>
+                  </View>
 
+                  {AUDIT_MODULES.map((mod) => (
                     <TouchableOpacity
-                      style={[o.greenBtn, { backgroundColor: '#0284c7', opacity: sensorLoading ? 0.7 : 1 }]}
-                      onPress={handleConnectBluetooth}
-                      disabled={sensorLoading}
+                      key={mod.key}
+                      activeOpacity={0.82}
+                      style={o.verticalMenuCard}
+                      onPress={() => setAuditTab(mod.key)}
                     >
-                      <Text style={o.greenBtnText}>
-                        {sensorLoading ? '⏳ กำลังดึงข้อมูลอากาศจริง...' : '🌐 ดึงข้อมูลอากาศจริง & เซนเซอร์'}
-                      </Text>
+                      <View style={[o.verticalMenuIconBox, { backgroundColor: mod.badgeBg }]}>
+                        <Text style={{ fontSize: 22 }}>{mod.icon}</Text>
+                      </View>
+
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={o.verticalMenuTitle}>{mod.title}</Text>
+                        <Text style={o.verticalMenuDesc}>{mod.subtitle}</Text>
+                      </View>
+
+                      <View style={o.verticalChevronCircle}>
+                        <Text style={{ color: mod.accent, fontWeight: 'bold', fontSize: 15 }}>›</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : (
+                /* เนื้อหาของหมวดที่เลือก */
+                <View style={{ gap: 12 }}>
+                  <View style={o.activeModuleStrip}>
+                    <Text style={o.activeModuleStripText}>
+                      หมวดที่เปิดอยู่: {AUDIT_MODULES.find((m) => m.key === auditTab)?.title}
+                    </Text>
+                    <TouchableOpacity onPress={() => setAuditTab(null)}>
+                      <Text style={o.changeModuleLink}>เปลี่ยนหมวด</Text>
                     </TouchableOpacity>
                   </View>
+
+                  {auditTab === 'gap' && (
+                    <View style={o.minimalCard}>
+                      <Text style={o.minimalCardTitle}>📋 ประเมินมาตรฐาน GAP · คุณ{selectedFarmer?.name}</Text>
+                      <Text style={[o.minimalCardSub, { marginBottom: 10 }]}>
+                        เปิด/ปิดสวิตช์ตามผลการตรวจจริงในแปลง
+                      </Text>
+
+                      {gapItems.map((item) => (
+                        <View key={item.id} style={o.checkRow}>
+                          <Switch
+                            value={item.checked}
+                            onValueChange={() => toggleGap(item.id)}
+                            trackColor={{ true: '#16a34a', false: '#cbd5e1' }}
+                            thumbColor="#ffffff"
+                          />
+                          <Text style={{ fontSize: 12, color: '#1e293b', flex: 1, marginLeft: 10, fontWeight: '500' }}>
+                            {item.title}
+                          </Text>
+                        </View>
+                      ))}
+
+                      <TouchableOpacity
+                        style={[o.pillBtnPrimary, { marginTop: 14, paddingVertical: 12 }]}
+                        onPress={handleSubmitAudit}
+                      >
+                        <Text style={o.pillBtnPrimaryText}>อนุมัติปล่อยล็อตสินค้า & ออก QR ➔</Text>
+                      </TouchableOpacity>
+
+                      {lotId !== '' && (
+                        <View style={o.qrBox}>
+                          <Text style={{ fontWeight: 'bold', color: '#15803d', marginBottom: 6 }}>
+                            ✅ อนุมัติสำเร็จ · Lot ID: {lotId}
+                          </Text>
+                          <Image
+                            source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://ผักไหม.com/trace/${lotId}` }}
+                            style={{ width: 120, height: 120, borderRadius: 10 }}
+                          />
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {auditTab === 'gis' && (
+                    <View style={o.minimalCard}>
+                      <Text style={o.minimalCardTitle}>🗺️ ปักหมุด GIS & GPS Polygon</Text>
+                      <Text style={[o.minimalCardSub, { marginBottom: 10 }]}>
+                        แตะบนแผนที่เพื่อปักหมุดและวาดขอบเขตแปลงเกษตรกร
+                      </Text>
+
+                      <View style={{ height: 340, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#dcfce7' }}>
+                        {Platform.OS === 'web' ? (
+                          <div style={{ height: '100%', width: '100%' }}>
+                            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                            <MapContainer center={[15.118624, 104.322015]} zoom={16} style={{ height: '100%', width: '100%' }}>
+                              <TileLayer
+                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                              />
+                              <MapClickHandler />
+
+                              {polygonPoints.map((point, index) => (
+                                <MarkerWeb key={index} position={[point.latitude, point.longitude]} />
+                              ))}
+
+                              {polygonPoints.length >= 3 && (
+                                <PolygonWeb
+                                  positions={polygonPoints.map((p) => [p.latitude, p.longitude])}
+                                  pathOptions={{ fillColor: 'rgba(22, 163, 74, 0.35)', color: '#15803d', weight: 3 }}
+                                />
+                              )}
+                            </MapContainer>
+                          </div>
+                        ) : (
+                          <MapView
+                            style={{ flex: 1 }}
+                            initialRegion={{
+                              latitude: 15.118624,
+                              longitude: 104.322015,
+                              latitudeDelta: 0.005,
+                              longitudeDelta: 0.005,
+                            }}
+                            mapType="satellite"
+                            onPress={handleMapPress}
+                          >
+                            {polygonPoints.map((point, index) => (
+                              <Marker key={index} coordinate={point} pinColor="red" />
+                            ))}
+
+                            {polygonPoints.length >= 3 && (
+                              <Polygon
+                                coordinates={polygonPoints}
+                                fillColor="rgba(22, 163, 74, 0.35)"
+                                strokeColor="#15803d"
+                                strokeWidth={3}
+                              />
+                            )}
+                          </MapView>
+                        )}
+                      </View>
+
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                        <TouchableOpacity
+                          onPress={clearPolygon}
+                          style={[o.pillBtnDangerSoft, { flex: 1 }]}
+                        >
+                          <Text style={o.pillBtnDangerSoftText}>ลบวาดใหม่</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          onPress={() => alert(`บันทึกพิกัดทั้งหมด ${polygonPoints.length} จุดสำเร็จ!`)}
+                          style={[o.pillBtnPrimary, { flex: 1 }]}
+                        >
+                          <Text style={o.pillBtnPrimaryText}>บันทึกพื้นที่แปลง</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+
+                  {auditTab === 'ai' && (
+                    <View style={o.minimalCard}>
+                      <Text style={o.minimalCardTitle}>🔬 สแกนโรคพืช AI Scanner</Text>
+                      <Text style={[o.minimalCardSub, { marginBottom: 10 }]}>
+                        เลือกรูปใบหรือลำต้นเพื่อวิเคราะห์โรคและเก็บประวัติ
+                      </Text>
+
+                      <View style={o.scannerBox}>
+                        <Text style={{ fontSize: 32, marginBottom: 6 }}>📷</Text>
+                        <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#166534' }}>
+                          ถ่ายหรือเลือกรูปภาพแปลงผักไหม
+                        </Text>
+
+                        <TouchableOpacity
+                          style={[o.pillBtnPrimary, { marginTop: 12, paddingHorizontal: 20, opacity: aiLoading ? 0.7 : 1 }]}
+                          onPress={handleScanAI}
+                          disabled={aiLoading}
+                        >
+                          <Text style={o.pillBtnPrimaryText}>
+                            {aiLoading ? 'กำลังวิเคราะห์ด้วย AI...' : 'เริ่มวิเคราะห์ด้วย AI'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {(aiHistory[selectedFarmer?.id] || []).map((item) => (
+                        <View key={item.id} style={[o.aiResultBox, { marginTop: 12 }]}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                            <Image source={{ uri: item.image }} style={{ width: 56, height: 56, borderRadius: 10, marginRight: 10 }} />
+                            <View>
+                              <Text style={{ fontSize: 10, color: '#64748b' }}>เวลาที่สแกน</Text>
+                              <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1e293b' }}>{item.timestamp}</Text>
+                            </View>
+                          </View>
+
+                          <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#15803d' }}>
+                            ✓ ผลการวิเคราะห์ AI (ความมั่นใจ {item.result.accuracy})
+                          </Text>
+                          <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#b91c1c', marginTop: 4 }}>
+                            ตรวจพบ: {item.result.disease}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: '#334155', marginTop: 3 }}>
+                            คำแนะนำ: {item.result.advice}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  {auditTab === 'sensor' && (
+                    <View style={o.minimalCard}>
+                      <Text style={o.minimalCardTitle}>📡 IoT & สภาพอากาศเรียลไทม์</Text>
+                      <Text style={[o.minimalCardSub, { marginBottom: 10 }]}>
+                        อุณหภูมิ แสงแดด และฝนดึงจาก Open-Meteo ตามพิกัดแปลง
+                      </Text>
+
+                      <View style={o.sensorPanelGreen}>
+                        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+                          <View style={o.sensorMetricMinimal}>
+                            <Text style={o.sensorMetricLabel}>ความชื้นดิน</Text>
+                            <Text style={[o.sensorMetricVal, { color: '#bbf7d0' }]}>{sensorData.moisture} %</Text>
+                          </View>
+                          <View style={o.sensorMetricMinimal}>
+                            <Text style={o.sensorMetricLabel}>อุณหภูมิ</Text>
+                            <Text style={[o.sensorMetricVal, { color: '#fde68a' }]}>{sensorData.temp} °C</Text>
+                          </View>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+                          <View style={o.sensorMetricMinimal}>
+                            <Text style={o.sensorMetricLabel}>แสงแดด</Text>
+                            <Text style={[o.sensorMetricVal, { color: '#bae6fd' }]}>{sensorData.sunlight} lux</Text>
+                          </View>
+                          <View style={o.sensorMetricMinimal}>
+                            <Text style={o.sensorMetricLabel}>ปริมาณน้ำฝน</Text>
+                            <Text style={[o.sensorMetricVal, { color: '#ddd6fe' }]}>{sensorData.rain} mm</Text>
+                          </View>
+                        </View>
+
+                        <TouchableOpacity
+                          style={[o.pillBtnLightOnGreen, { opacity: sensorLoading ? 0.7 : 1 }]}
+                          onPress={handleConnectBluetooth}
+                          disabled={sensorLoading}
+                        >
+                          <Text style={o.pillBtnLightOnGreenText}>
+                            {sensorLoading ? '⏳ กำลังดึงข้อมูลอากาศจริง...' : '🌐 ดึงข้อมูลอากาศจริง & เซนเซอร์'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
                 </View>
               )}
             </ScrollView>
@@ -1203,35 +1329,39 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
         <Modal visible={showManageModal} animationType="slide" transparent>
           <View style={o.modalOverlay}>
             <View style={[o.modalCard, { maxHeight: '80%', padding: 0, overflow: 'hidden' }]}>
-              <View style={{ backgroundColor: '#f1f5f9', padding: 15, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }}>
-                <Text style={[o.modalTitle, { fontSize: 14, color: '#334155' }]}>⚙️ จัดการข้อมูล (เลือกลบหรือแก้ไขประจำวัน)</Text>
+              <View style={{ backgroundColor: '#f0fdf4', padding: 15, borderBottomWidth: 1, borderBottomColor: '#dcfce7' }}>
+                <Text style={[o.modalTitle, { fontSize: 14, color: '#166534' }]}>⚙️ จัดการข้อมูล (เลือกลบหรือแก้ไขประจำวัน)</Text>
               </View>
-              
+
               <ScrollView style={{ padding: 10 }}>
-                {logs && logs.length > 0 ? logs.map(log => {
-                  const logOwner = farmersList.find(u => u.id === log.farmerId);
+                {logs && logs.length > 0 ? logs.map((log) => {
+                  const logOwner = farmersList.find((u) => u.id === log.farmerId);
                   const ownerName = logOwner ? logOwner.name : log.farmerId;
                   return (
-                    <View key={log.id} style={{ backgroundColor: '#ffffff', padding: 12, marginBottom: 8, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View key={log.id} style={{ backgroundColor: '#ffffff', padding: 12, marginBottom: 8, borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                       <View style={{ flex: 1, paddingRight: 8 }}>
                         <Text style={{ fontWeight: 'bold', fontSize: 12, color: '#0f172a' }} numberOfLines={1}>
                           คุณ{ownerName} (ID: {log.farmerId})
                         </Text>
-                        <Text style={{ fontSize: 11, color: '#475569', marginTop: 2 }} numberOfLines={1}>ประเภท: {log.type} {log.activity ? `(${log.activity})` : ''}</Text>
-                        <Text style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>เวลา: {new Date(log.time).toLocaleString('th-TH')}</Text>
+                        <Text style={{ fontSize: 11, color: '#475569', marginTop: 2 }} numberOfLines={1}>
+                          ประเภท: {log.type} {log.activity ? `(${log.activity})` : ''}
+                        </Text>
+                        <Text style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
+                          เวลา: {new Date(log.time).toLocaleString('th-TH')}
+                        </Text>
                       </View>
                       <View style={{ flexDirection: 'row', gap: 6 }}>
-                        <TouchableOpacity 
-                          style={{ backgroundColor: '#e0f2fe', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 6 }}
+                        <TouchableOpacity
+                          style={{ backgroundColor: '#dcfce7', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8 }}
                           onPress={() => handleOpenEditLog(log)}
                         >
-                          <Text style={{ fontSize: 12, color: '#0284c7', fontWeight: 'bold' }}>✏️ แก้ไข</Text>
+                          <Text style={{ fontSize: 12, color: '#15803d', fontWeight: 'bold' }}>✏️ แก้ไข</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity 
-                          style={{ backgroundColor: '#fee2e2', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 6 }}
+                        <TouchableOpacity
+                          style={{ backgroundColor: '#fee2e2', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8 }}
                           onPress={() => confirmDeleteLog(log.id)}
                         >
-                          <Text style={{ fontSize: 12, color: '#b91c1c', fontWeight: 'bold' }}>🗑️ ลบทั้งหมด</Text>
+                          <Text style={{ fontSize: 12, color: '#b91c1c', fontWeight: 'bold' }}>🗑️ ลบ</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -1241,7 +1371,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
                 )}
               </ScrollView>
 
-              <TouchableOpacity style={{ backgroundColor: '#0f172a', padding: 15, alignItems: 'center' }} onPress={() => setShowManageModal(false)}>
+              <TouchableOpacity style={{ backgroundColor: '#15803d', padding: 14, alignItems: 'center' }} onPress={() => setShowManageModal(false)}>
                 <Text style={{ color: '#fff', fontWeight: 'bold' }}>ปิดหน้าต่าง</Text>
               </TouchableOpacity>
             </View>
@@ -1253,17 +1383,17 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
           <View style={o.modalOverlay}>
             <View style={[o.modalCard, { maxHeight: '85%' }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <Text style={[o.modalTitle, { fontSize: 16 }]}>📄 รายรายละเอียดบันทึกกิจกรรม</Text>
-                
+                <Text style={[o.modalTitle, { fontSize: 16 }]}>📄 รายละเอียดบันทึกกิจกรรม</Text>
+
                 {selectedLog?.activityLog && (
                   <View style={{ flexDirection: 'row', gap: 6 }}>
-                    <TouchableOpacity 
-                      style={{ backgroundColor: '#e0f2fe', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 }}
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#dcfce7', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 }}
                       onPress={() => handleOpenEditLog(selectedLog.activityLog)}
                     >
-                      <Text style={{ fontSize: 11, color: '#0284c7', fontWeight: 'bold' }}>✏️ แก้ไข</Text>
+                      <Text style={{ fontSize: 11, color: '#15803d', fontWeight: 'bold' }}>✏️ แก้ไข</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={{ backgroundColor: '#fee2e2', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 }}
                       onPress={() => {
                         setShowReportModal(false);
@@ -1275,11 +1405,10 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
                   </View>
                 )}
               </View>
-              
+
               <ScrollView style={{ marginTop: 4, width: '100%' }} showsVerticalScrollIndicator={false}>
                 {selectedLog && (
-                  <View style={{ backgroundColor: '#fafafa', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#e2e8f0' }}>
-                    
+                  <View style={{ backgroundColor: '#f8fafc', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#e2e8f0' }}>
                     {selectedLog.isCombinedView ? (
                       <>
                         <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0f172a', marginBottom: 2 }}>
@@ -1291,27 +1420,27 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
 
                         {selectedLog.activityLog ? (
                           <>
-                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 6, backgroundColor: '#e8f5e9', padding: 4 }}>ข้อมูลกิจกรรม</Text>
+                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#15803d', marginTop: 6, backgroundColor: '#dcfce7', padding: 4, borderRadius: 4 }}>ข้อมูลกิจกรรม</Text>
                             {renderReportRow('วันที่ปฏิบัติงาน', selectedLog.activityLog.date, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'date', 'วันที่ปฏิบัติงาน'))}
                             {renderReportRow('แปลงที่ทำ', selectedLog.activityLog.plot, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'plot', 'แปลงที่ทำ'))}
                             {renderReportRow('กิจกรรมหลัก', selectedLog.activityLog.activity, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'activity', 'กิจกรรมหลัก'))}
                             {renderReportRow('รายละเอียดกิจกรรม', selectedLog.activityLog.activityNote, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'activityNote', 'รายละเอียดกิจกรรม'))}
 
-                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>ปัจจัยที่ใช้ & แหล่งน้ำ</Text>
+                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#15803d', marginTop: 10, backgroundColor: '#dcfce7', padding: 4, borderRadius: 4 }}>ปัจจัยที่ใช้ & แหล่งน้ำ</Text>
                             {renderReportRow('ปุ๋ย/ปัจจัยที่ใช้', selectedLog.activityLog.input?.notDone ? 'ไม่ได้ทำ' : selectedLog.activityLog.input?.type ? `${selectedLog.activityLog.input.type} (${selectedLog.activityLog.input.quantity})` : null, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'input', 'ปุ๋ย/ปัจจัยที่ใช้'))}
                             {renderReportRow('น้ำหมัก/สารทำเอง', selectedLog.activityLog.selfMade?.notDone ? 'ไม่ได้ทำ' : selectedLog.activityLog.selfMade?.formula, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'selfMade', 'น้ำหมัก/สารทำเอง'))}
                             {renderReportRow('แหล่งน้ำ', selectedLog.activityLog.water?.notDone ? 'ไม่ได้ทำ' : selectedLog.activityLog.water?.source, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'water', 'แหล่งน้ำ'))}
-                            
-                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>แรงงาน</Text>
+
+                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#15803d', marginTop: 10, backgroundColor: '#dcfce7', padding: 4, borderRadius: 4 }}>แรงงาน</Text>
                             {renderReportRow('ประเภทแรงงาน', selectedLog.activityLog.workerNotDone ? 'ไม่ได้ทำ' : selectedLog.activityLog.worker, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'worker', 'ประเภทแรงงาน'))}
-                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>กิจกรรมเพิ่มเติม</Text>
+                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#15803d', marginTop: 10, backgroundColor: '#dcfce7', padding: 4, borderRadius: 4 }}>กิจกรรมเพิ่มเติม</Text>
                             {renderReportRow('กิจกรรมเพิ่มเติม', selectedLog.activityLog.additionalActivity, () => confirmDeleteActivityField(selectedLog.activityLog.id, 'additionalActivity', 'กิจกรรมเพิ่มเติม'))}
                           </>
                         ) : (
                           <Text style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', marginVertical: 8 }}>ยังไม่มีบันทึกกิจกรรมประจำวัน</Text>
                         )}
 
-                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0284c7', marginTop: 12, backgroundColor: '#e0f2fe', padding: 4 }}>ข้อมูลความชื้น (IoT / Manual)</Text>
+                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#166534', marginTop: 12, backgroundColor: '#dcfce7', padding: 4, borderRadius: 4 }}>ข้อมูลความชื้น (IoT / Manual)</Text>
                         {selectedLog.moistureLog ? (
                           renderReportRow('ค่าความชื้นที่วัดได้', `${selectedLog.moistureLog.moisture} %`, () => confirmDeleteActivityField(selectedLog.moistureLog.id, 'moisture', 'ค่าความชื้น'))
                         ) : selectedLog.activityLog && selectedLog.activityLog.moisture !== undefined ? (
@@ -1331,33 +1460,31 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
 
                         {selectedLog.type === 'บันทึกกิจกรรมประจำวัน' || selectedLog.type === 'เจ้าหน้าที่ลงบันทึกแทน' ? (
                           <>
-                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>ข้อมูลกิจกรรม</Text>
+                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#15803d', marginTop: 10, backgroundColor: '#dcfce7', padding: 4, borderRadius: 4 }}>ข้อมูลกิจกรรม</Text>
                             {renderReportRow('วันที่ปฏิบัติงาน', selectedLog.date, () => confirmDeleteActivityField(selectedLog.id, 'date', 'วันที่ปฏิบัติงาน'))}
                             {renderReportRow('แปลงที่ทำ', selectedLog.plot, () => confirmDeleteActivityField(selectedLog.id, 'plot', 'แปลงที่ทำ'))}
                             {renderReportRow('กิจกรรมหลัก', selectedLog.activity, () => confirmDeleteActivityField(selectedLog.id, 'activity', 'กิจกรรมหลัก'))}
                             {renderReportRow('รายละเอียดกิจกรรม', selectedLog.activityNote, () => confirmDeleteActivityField(selectedLog.id, 'activityNote', 'รายละเอียดกิจกรรม'))}
 
-                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>ปัจจัยที่ใช้ & แหล่งน้ำ</Text>
+                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#15803d', marginTop: 10, backgroundColor: '#dcfce7', padding: 4, borderRadius: 4 }}>ปัจจัยที่ใช้ & แหล่งน้ำ</Text>
                             {renderReportRow('ปุ๋ย/ปัจจัยที่ใช้', selectedLog.input?.notDone ? 'ไม่ได้ทำ' : selectedLog.input?.type ? `${selectedLog.input.type} (${selectedLog.input.quantity})` : null, () => confirmDeleteActivityField(selectedLog.id, 'input', 'ปุ๋ย/ปัจจัยที่ใช้'))}
                             {renderReportRow('น้ำหมัก/สารทำเอง', selectedLog.selfMade?.notDone ? 'ไม่ได้ทำ' : selectedLog.selfMade?.formula, () => confirmDeleteActivityField(selectedLog.id, 'selfMade', 'น้ำหมัก/สารทำเอง'))}
                             {renderReportRow('แหล่งน้ำ', selectedLog.water?.notDone ? 'ไม่ได้ทำ' : selectedLog.water?.source, () => confirmDeleteActivityField(selectedLog.id, 'water', 'แหล่งน้ำ'))}
-                            
-                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>แรงงาน</Text>
+
+                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#15803d', marginTop: 10, backgroundColor: '#dcfce7', padding: 4, borderRadius: 4 }}>แรงงาน</Text>
                             {renderReportRow('ประเภทแรงงาน', selectedLog.workerNotDone ? 'ไม่ได้ทำ' : selectedLog.worker, () => confirmDeleteActivityField(selectedLog.id, 'worker', 'ประเภทแรงงาน'))}
-                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginTop: 10, backgroundColor: '#e8f5e9', padding: 4 }}>กิจกรรมเพิ่มเติม</Text>
+                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#15803d', marginTop: 10, backgroundColor: '#dcfce7', padding: 4, borderRadius: 4 }}>กิจกรรมเพิ่มเติม</Text>
                             {renderReportRow('กิจกรรมเพิ่มเติม', selectedLog.additionalActivity, () => confirmDeleteActivityField(selectedLog.id, 'additionalActivity', 'กิจกรรมเพิ่มเติม'))}
 
                             {selectedLog.moisture !== undefined && (
                               <>
-                                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0284c7', marginTop: 10, backgroundColor: '#e0f2fe', padding: 4 }}>ข้อมูลความชื้น</Text>
+                                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#166534', marginTop: 10, backgroundColor: '#dcfce7', padding: 4, borderRadius: 4 }}>ข้อมูลความชื้น</Text>
                                 {renderReportRow('ความชื้นที่ระบุ', `${selectedLog.moisture} %`, () => confirmDeleteActivityField(selectedLog.id, 'moisture', 'ความชื้น'))}
                               </>
                             )}
                           </>
                         ) : selectedLog.type === 'วัดความชื้น' ? (
-                          <>
-                            {renderReportRow('ค่าความชื้นที่วัดได้', selectedLog.moisture ? `${selectedLog.moisture} %` : null, () => confirmDeleteActivityField(selectedLog.id, 'moisture', 'ค่าความชื้น'))}
-                          </>
+                          renderReportRow('ค่าความชื้นที่วัดได้', selectedLog.moisture ? `${selectedLog.moisture} %` : null, () => confirmDeleteActivityField(selectedLog.id, 'moisture', 'ค่าความชื้น'))
                         ) : (
                           <>
                             {renderReportRow('รายละเอียดเพิ่มเติม', selectedLog.summary, () => confirmDeleteActivityField(selectedLog.id, 'summary', 'รายละเอียด'))}
@@ -1366,21 +1493,21 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
                         )}
                       </>
                     )}
-
                   </View>
                 )}
               </ScrollView>
 
               <TouchableOpacity
-                style={[o.bigBtn, { width: '100%', backgroundColor: '#0284c7', marginTop: 15 }]}
+                style={[o.pillBtnPrimary, { width: '100%', marginTop: 14, paddingVertical: 12 }]}
                 onPress={() => setShowReportModal(false)}
               >
-                <Text style={o.bigBtnText}>ปิดหน้าต่าง</Text>
+                <Text style={o.pillBtnPrimaryText}>ปิดหน้าต่าง</Text>
               </TouchableOpacity>
             </View>
           </View>
         </Modal>
 
+        {/* MODAL: ข้อมูลหมุดแปลงบนแผนที่ */}
         <Modal
           visible={Boolean(selectedMapFarmer)}
           animationType="fade"
@@ -1398,7 +1525,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
 
               {selectedMapFarmer && (
                 <ScrollView style={{ marginTop: 10 }}>
-                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1b5e20' }}>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#15803d' }}>
                     คุณ{selectedMapFarmer.name}
                   </Text>
                   {selectedMapFarmer.isSample ? (
@@ -1459,13 +1586,13 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
 
               <TouchableOpacity
                 style={[
-                  o.bigBtn,
-                  { marginTop: 12, backgroundColor: '#2e7d32', opacity: savingVisit ? 0.6 : 1 },
+                  o.pillBtnPrimary,
+                  { marginTop: 12, paddingVertical: 12, opacity: savingVisit ? 0.6 : 1 },
                 ]}
                 onPress={handleMarkVisited}
                 disabled={savingVisit}
               >
-                <Text style={o.bigBtnText}>
+                <Text style={o.pillBtnPrimaryText}>
                   {savingVisit
                     ? 'กำลังบันทึก...'
                     : selectedVisit?.visitedAt
@@ -1474,19 +1601,18 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[o.bigBtn, { marginTop: 8, backgroundColor: '#64748b' }]}
+                style={[o.pillBtnSecondarySoft, { marginTop: 8, paddingVertical: 11 }]}
                 onPress={() => setSelectedMapFarmer(null)}
               >
-                <Text style={o.bigBtnText}>ปิด</Text>
+                <Text style={o.pillBtnSecondarySoftText}>ปิด</Text>
               </TouchableOpacity>
             </View>
           </View>
         </Modal>
-        {currentPage === 'home' && (
-        <SharedBottomNav activeTab={bottomTab} onSelectTab={setBottomTab} unreadCount={2} />
-      )}
-        
 
+        {currentPage === 'home' && (
+          <SharedBottomNav activeTab={bottomTab} onSelectTab={setBottomTab} unreadCount={2} />
+        )}
       </View>
     </SafeAreaView>
   );
@@ -1494,196 +1620,402 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
 
 const o = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#ffffff' },
-  mainLayout: { flex: 1, backgroundColor: '#f1f8e9' },
+  mainLayout: { flex: 1, backgroundColor: '#f4f9f5' },
+  minimalScrollContent: { paddingBottom: 32, gap: 14 },
 
-  headerCard: {
-    backgroundColor: '#72c07b',
-    padding: 14,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
+  // ส่วนหัวสีเขียวโค้งมนด้านล่าง (สไตล์รูป 4)
+  heroCurveHeader: {
+    backgroundColor: '#15803d',
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 42,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
   },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  onlineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#ffffff' },
-  headerSubtitle: { color: '#ffffff', fontSize: 10, fontWeight: 'bold' },
-  profileName: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 },
-  profileSub: { fontSize: 11, color: '#e8f5e9', fontWeight: 'normal' },
-  profileRole: { color: '#f1f8e9', fontSize: 11, marginTop: 2 },
-
-  refreshBtn: { backgroundColor: '#e8f5e9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-
-  subHeader: { backgroundColor: '#388e3c', flexDirection: 'row', alignItems: 'center', padding: 10 },
-  backBtn: { backgroundColor: 'rgba(255,255,255,0.2)', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8 },
-  backBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 11 },
-
-  auditTabNav: { flexDirection: 'row', backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#e0e0e0' },
-  tabItem: { flex: 1, paddingVertical: 10, alignItems: 'center' },
-  tabItemActive: { borderBottomWidth: 3, borderBottomColor: '#2e7d32' },
-  tabText: { fontSize: 12, color: '#616161', fontWeight: '600' },
-  tabTextActive: { color: '#2e7d32', fontWeight: 'bold' },
-
-  container: { padding: 12, paddingBottom: 30, gap: 10 },
-  sectionCard: { backgroundColor: '#ffffff', borderRadius: 12, padding: 12, elevation: 1 },
-  sectionTitle: { color: '#2e7d32', fontWeight: 'bold', fontSize: 13, marginBottom: 8 },
-
-  kpiGrid: { flexDirection: 'row', gap: 8, marginTop: 4 },
-  kpiCard: { flex: 1, backgroundColor: '#f9fbe7', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#dce775' },
-  kpiLabel: { color: '#616161', fontSize: 10, fontWeight: 'bold' },
-  kpiNum: { color: '#1b5e20', fontSize: 18, fontWeight: '900', marginTop: 2 },
-  kpiUnit: { fontSize: 10, fontWeight: 'normal', color: '#616161' },
-
-  mapSimContainer: { height: 120, backgroundColor: '#1b5e20', borderRadius: 10, position: 'relative', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
-  mapPin: { position: 'absolute', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  mapLocationNotice: { marginTop: 7, padding: 8, backgroundColor: '#fff8e1', borderRadius: 8 },
-  mapLocationTag: { paddingHorizontal: 7, paddingVertical: 4, backgroundColor: '#ffecb3', borderRadius: 6 },
-  mapDetailBox: { marginTop: 10, padding: 10, backgroundColor: '#f1f8e9', borderRadius: 8 },
-  mapDetailText: { fontSize: 12, color: '#334155', marginTop: 3 },
-  mapNoLocationText: { marginTop: 10, padding: 10, backgroundColor: '#fff8e1', color: '#795548', borderRadius: 8, fontSize: 12 },
-
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  badge: { backgroundColor: '#e8f5e9', color: '#2e7d32', fontSize: 10, fontWeight: 'bold', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
-  queueItem: { backgroundColor: '#ffffff', borderRadius: 10, padding: 10, marginTop: 8, borderWidth: 1, borderColor: '#c8e6c9' },
-  queueCode: { fontSize: 10, fontWeight: 'bold', color: '#757575' },
-  queueName: { fontSize: 13, fontWeight: 'bold', color: '#2e7d32', marginTop: 2 },
-  queueDesc: { fontSize: 11, color: '#616161', marginTop: 1 },
-
-  checkStatusGroup: { flexDirection: 'row', gap: 6, marginTop: 6 },
-  checkBadge: { fontSize: 10, fontWeight: 'bold', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-
-  lastLogBox: { backgroundColor: '#f1f8e9', padding: 8, borderRadius: 6, marginTop: 2 },
-  lastLogTitle: { fontSize: 10, fontWeight: 'bold', color: '#2e7d32' },
-  lastLogText: { fontSize: 11, color: '#333', marginTop: 2 },
-
-  actionBtn: { borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
-  actionBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 11 },
-
-  darkBox: { backgroundColor: '#1b5e20', borderRadius: 10, padding: 12 },
-  greenBtn: { backgroundColor: '#4caf50', borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
-  greenBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
-
-  scannerBox: { backgroundColor: '#f1f8e9', borderWidth: 2, borderStyle: 'dashed', borderColor: '#a5d6a7', borderRadius: 12, padding: 16, alignItems: 'center' },
-  aiResultBox: { backgroundColor: '#e8f5e9', borderWidth: 1, borderColor: '#a5d6a7', borderRadius: 8, padding: 10, marginTop: 8 },
-  sensorMetric: { flex: 1, backgroundColor: '#2e7d32', padding: 8, borderRadius: 8, alignItems: 'center' },
-
-  checkRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f1f8e9', padding: 6, borderRadius: 8, marginBottom: 6, borderWidth: 1, borderColor: '#c8e6c9' },
-  qrBox: { backgroundColor: '#e8f5e9', padding: 12, borderRadius: 10, alignItems: 'center', marginTop: 10, borderWidth: 1, borderColor: '#a5d6a7' },
-
-  bigBtn: {
-    borderRadius: 8,
-    paddingVertical: 12,
+  heroTopBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: 12,
   },
-  bigBtnText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-    fontSize: 13,
+  heroBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  heroBadgeText: { color: '#dcfce7', fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+  onlinePill: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
   },
-
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#2e7d32',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  customInput: {
-    borderColor: '#a5d6a7',
-    borderWidth: 1,
-    borderRadius: 8,
+  onlinePillText: { color: '#ffffff', fontSize: 10, fontWeight: '700' },
+  logoutPillBtn: {
+    backgroundColor: 'rgba(255,255,255,0.16)',
     paddingHorizontal: 10,
-    height: 40,
-    backgroundColor: '#fafafa',
+    paddingVertical: 5,
+    borderRadius: 999,
   },
+  logoutPillText: { color: '#ffffff', fontSize: 11, fontWeight: '600' },
+  heroTitle: { color: '#ffffff', fontSize: 20, fontWeight: '800' },
+  heroSubtitle: { color: '#bbf7d0', fontSize: 12, marginTop: 2, marginBottom: 14 },
 
-  // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalCard: { width: '100%', backgroundColor: '#ffffff', borderRadius: 16, padding: 16, elevation: 5 },
-  modalTitle: { fontSize: 15, fontWeight: 'bold', color: '#2e7d32' },
-// Top Header Bar
-  topHeader: {
+  searchBoxMinimal: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2e7d32',
+    backgroundColor: '#ffffff',
+    borderRadius: 999,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 10,
+    height: 40,
   },
-  logoBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  searchPill: {
+  searchInputMinimal: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 22,
-    paddingHorizontal: 12,
-    height: 38,
-  },
-  searchInput: { flex: 1, fontSize: 13, color: '#1f2937', outlineStyle: 'none' },
-  headerIconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    fontSize: 13,
+    color: '#0f172a',
+    outlineStyle: 'none',
   },
 
-  // Hero Banner
-  heroBanner: {
-    backgroundColor: '#388e3c',
-    borderRadius: 18,
-    padding: 16,
+  // การ์ดสรุปและเมนูลัดมินิมอลซ้อนทับด้านล่างส่วนหัว (สไตล์รูป 2 & 4)
+  floatingSummaryCard: {
+    marginHorizontal: 14,
+    marginTop: -28,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#14532d',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
     elevation: 3,
   },
-  heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  heroTag: { backgroundColor: 'rgba(255,255,255,0.22)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  heroTagRight: { backgroundColor: '#1b5e20', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  heroTagText: { color: '#ffffff', fontSize: 10, fontWeight: 'bold' },
-  heroGreeting: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' },
-  heroSub: { color: '#e8f5e9', fontSize: 11, marginTop: 2, marginBottom: 12 },
-  heroStatsRow: { flexDirection: 'row', gap: 8 },
-  heroStatPill: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-  },
-  heroStatLabel: { color: '#e8f5e9', fontSize: 10 },
-  heroStatVal: { color: '#ffffff', fontSize: 13, fontWeight: 'bold', marginTop: 2 },
-
-  // 4-Column Icon Grid
-  gridCard: { backgroundColor: '#ffffff', borderRadius: 18, paddingVertical: 12, paddingHorizontal: 8, elevation: 2 },
-  iconGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  iconGridItem: { width: '25%', alignItems: 'center', paddingVertical: 6 },
-  iconCircle: { width: 50, height: 50, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
-  iconEmoji: { fontSize: 22 },
-  iconLabel: { fontSize: 11, color: '#374151', fontWeight: '600', textAlign: 'center' },
-
-  // Section Divider
-  sectionDividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 2 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#c8e6c9' },
-  sectionDividerText: { fontSize: 13, fontWeight: 'bold', color: '#2e7d32' },
-
-  // Bottom Navigation Bar
-  bottomNav: {
+  summaryStatsRow: {
     flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    paddingVertical: 8,
-    paddingHorizontal: 6,
+    alignItems: 'center',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
   },
-  bottomNavItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  bottomNavIcon: { fontSize: 20, opacity: 0.55 },
-  bottomNavActive: { opacity: 1 },
-  bottomNavText: { fontSize: 10, color: '#6b7280', marginTop: 2, fontWeight: '600' },
-  bottomNavTextActive: { color: '#2e7d32', fontWeight: 'bold' },
+  summaryStatCol: { flex: 1, alignItems: 'center' },
+  summaryStatNum: { fontSize: 17, fontWeight: '800', color: '#15803d' },
+  summaryStatLabel: { fontSize: 11, color: '#64748b', marginTop: 2, fontWeight: '600' },
+  summaryDividerVert: { width: 1, height: 28, backgroundColor: '#e2e8f0' },
+
+  quickActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    gap: 6,
+  },
+  quickActionItem: { flex: 1, alignItems: 'center' },
+  quickActionIconBox: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  quickActionLabel: { fontSize: 11, color: '#334155', fontWeight: '600' },
+
+  // การ์ดมินิมอลทั่วไป
+  minimalCard: {
+    marginHorizontal: 14,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#14532d',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  cardRowBetween: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  cardTitleGroup: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  miniIconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  minimalCardTitle: { fontSize: 14, fontWeight: '800', color: '#14532d' },
+  minimalCardSub: { fontSize: 11, color: '#64748b', marginTop: 1 },
+  softGreenPill: {
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  softGreenPillText: { color: '#15803d', fontSize: 11, fontWeight: '700' },
+
+  // แผนที่และหมุด
+  mapSimContainer: {
+    height: 150,
+    backgroundColor: '#166534',
+    borderRadius: 14,
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  mapLocationNotice: {
+    marginTop: 8,
+    padding: 9,
+    backgroundColor: '#f0fdf4',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#dcfce7',
+  },
+  mapLocationTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#dcfce7',
+    borderRadius: 8,
+  },
+  mapDetailBox: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: '#f0fdf4',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  mapDetailText: { fontSize: 12, color: '#334155', marginTop: 3 },
+  mapNoLocationText: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: '#fef3c7',
+    color: '#92400e',
+    borderRadius: 12,
+    fontSize: 12,
+  },
+
+  // รายการเกษตรกรแบบมินิมอล
+  farmerMinimalItem: {
+    backgroundColor: '#fafffb',
+    borderRadius: 16,
+    padding: 12,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#dcfce7',
+  },
+  queueCode: { fontSize: 10, fontWeight: '700', color: '#64748b' },
+  statusChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
+  queueName: { fontSize: 14, fontWeight: '800', color: '#14532d', marginTop: 4 },
+  queueDesc: { fontSize: 11, color: '#64748b', marginTop: 2 },
+
+  checkStatusGroup: { flexDirection: 'row', gap: 6, marginTop: 8 },
+  checkBadge: { fontSize: 10, fontWeight: '700', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 },
+
+  lastLogBox: {
+    backgroundColor: '#f0fdf4',
+    padding: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#dcfce7',
+  },
+  lastLogTitle: { fontSize: 10, fontWeight: '700', color: '#15803d' },
+  lastLogText: { fontSize: 11, color: '#1e293b', marginTop: 2 },
+  eyeIconBtn: {
+    backgroundColor: '#dcfce7',
+    padding: 7,
+    borderRadius: 10,
+  },
+
+  // ปุ่มมินิมอลขอบมน
+  pillBtnPrimary: {
+    backgroundColor: '#16a34a',
+    borderRadius: 999,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pillBtnPrimaryText: { color: '#ffffff', fontWeight: '700', fontSize: 12 },
+
+  pillBtnOutline: {
+    backgroundColor: '#ffffff',
+    borderRadius: 999,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#86efac',
+  },
+  pillBtnOutlineText: { color: '#15803d', fontWeight: '700', fontSize: 12 },
+
+  pillBtnDangerSoft: {
+    backgroundColor: '#fee2e2',
+    borderRadius: 999,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pillBtnDangerSoftText: { color: '#b91c1c', fontWeight: '700', fontSize: 12 },
+
+  pillBtnSecondarySoft: {
+    backgroundColor: '#f1f5f9',
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pillBtnSecondarySoftText: { color: '#475569', fontWeight: '700', fontSize: 12 },
+
+  // หน้าตรวจประเมิน: หัว + เมนูแนวตั้ง 4 รายการ
+  auditTopHeader: {
+    backgroundColor: '#15803d',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+  auditBackPill: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+  },
+  auditBackPillText: { color: '#ffffff', fontWeight: '700', fontSize: 11 },
+  auditHeaderTitle: { color: '#ffffff', fontWeight: '800', fontSize: 14 },
+  auditHeaderSub: { color: '#dcfce7', fontSize: 11, marginTop: 1 },
+
+  verticalMenuWrapper: { paddingHorizontal: 14, paddingTop: 4, gap: 10 },
+  verticalMenuBanner: {
+    backgroundColor: '#dcfce7',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 2,
+  },
+  verticalMenuBannerTitle: { fontSize: 13, fontWeight: '800', color: '#14532d' },
+  verticalMenuBannerSub: { fontSize: 11, color: '#166534', marginTop: 2 },
+
+  verticalMenuCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#14532d',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  verticalMenuIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  verticalMenuTitle: { fontSize: 14, fontWeight: '800', color: '#0f172a' },
+  verticalMenuDesc: { fontSize: 11, color: '#64748b', marginTop: 2 },
+  verticalChevronCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#f8fafc',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  activeModuleStrip: {
+    marginHorizontal: 14,
+    marginTop: 4,
+    backgroundColor: '#dcfce7',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  activeModuleStripText: { fontSize: 12, fontWeight: '700', color: '#14532d' },
+  changeModuleLink: { fontSize: 12, fontWeight: '800', color: '#15803d', textDecorationLine: 'underline' },
+
+  // GAP, AI, IoT
+  checkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    padding: 10,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  qrBox: {
+    backgroundColor: '#f0fdf4',
+    padding: 14,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  scannerBox: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#86efac',
+    borderRadius: 16,
+    padding: 18,
+    alignItems: 'center',
+  },
+  aiResultBox: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#dcfce7',
+    borderRadius: 14,
+    padding: 12,
+  },
+
+  sensorPanelGreen: {
+    backgroundColor: '#15803d',
+    borderRadius: 16,
+    padding: 12,
+  },
+  sensorMetricMinimal: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    padding: 10,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  sensorMetricLabel: { color: '#dcfce7', fontSize: 11, fontWeight: '600' },
+  sensorMetricVal: { fontSize: 19, fontWeight: '800', marginTop: 3 },
+  pillBtnLightOnGreen: {
+    backgroundColor: '#ffffff',
+    borderRadius: 999,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  pillBtnLightOnGreenText: { color: '#15803d', fontWeight: '800', fontSize: 12 },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 16,
+    elevation: 5,
+  },
+  modalTitle: { fontSize: 15, fontWeight: '800', color: '#14532d' },
 });
