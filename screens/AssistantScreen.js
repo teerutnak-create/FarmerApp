@@ -12,6 +12,7 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
 } from 'react-native';
+import { requestAssistant } from '../lib/assistantApi';
 
 const WELCOME_MESSAGE = {
   id: 'welcome',
@@ -204,26 +205,12 @@ export default function AssistantScreen(props) {
     setLoading(true);
 
     try {
-      const apiUrl = '/api/assistant';
-
       // ส่งประวัติการคุย (ตัดข้อความต้อนรับเริ่มต้นออก) เพื่อให้ AI จำบริบทต่อเนื่องได้
       const historyForApi = updatedMessages
         .filter((m) => m.id !== 'welcome')
         .map(({ role, content }) => ({ role, content }));
 
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: historyForApi,
-          context: props.context || '',
-        }),
-      });
-
-      const text = await res.text();
-      if (!res.ok) {
-        throw new Error(text || `HTTP ${res.status}`);
-      }
+      const text = await requestAssistant(historyForApi, props.context || '');
 
       const aiMsg = {
         id: (Date.now() + 1).toString(),
