@@ -28,7 +28,7 @@ import {
 
 const USERS_KEY = 'registered_users';
 
-const FALLBACK_WEB_URL = 'https://farmerapp-ashy.vercel.app/'; // แก้เป็นลิงก์ Vercel จริงของคุณถ้าเทสบนมือถือ
+const FALLBACK_WEB_URL = 'https://farmerapp-ashy.vercel.app'; // ลิงก์ Vercel จริงสำหรับเทสบนมือถือ
 
 const TESTER_FARMER = {
   id: 'FRM-TESTER-01',
@@ -169,6 +169,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
   const [homeTab, setHomeTab] = useState('all'); // 'all' | 'map' | 'farmers'
   const [bottomTab, setBottomTab] = useState('home');
   const [auditTab, setAuditTab] = useState(null); // null = แสดงเมนูแนวตั้ง 4 รายการก่อนเลือก
+  const [aiCrop, setAiCrop] = useState(null); // null = เลือกพืช | 'rice' | 'soybean'
   const [selectedFarmer, setSelectedFarmer] = useState(null);
   const [registeredFarmers, setRegisteredFarmers] = useState([]);
   const [farmLocations, setFarmLocations] = useState({});
@@ -541,6 +542,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
     setSelectedFarmer(farmer);
     setCurrentPage('audit');
     setAuditTab(null); // แสดงเมนูแนวตั้งให้เลือกก่อน
+    setAiCrop(null);
   };
 
   const handleOpenAddLog = (farmer) => {
@@ -697,6 +699,9 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
         });
       }
 
+      // ส่งชนิดพืช ('rice' หรือ 'soybean') ไปให้ app.py
+      formData.append('crop', aiCrop || 'rice');
+
       const res = await fetch('https://576lb288-5000.asse.devtunnels.ms/predict', {
         method: 'POST',
         body: formData,
@@ -710,6 +715,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
 
         const newRecord = {
           id: Date.now().toString(),
+          crop: aiCrop || 'rice',
           image: realImageUri,
           result: result,
           timestamp: timeString,
@@ -1085,8 +1091,11 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
             <View style={o.auditTopHeader}>
               <TouchableOpacity
                 onPress={() => {
-                  if (auditTab) {
+                  if (auditTab === 'ai' && aiCrop) {
+                    setAiCrop(null);
+                  } else if (auditTab) {
                     setAuditTab(null);
+                    setAiCrop(null);
                   } else {
                     setCurrentPage('home');
                   }
@@ -1094,7 +1103,11 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
                 style={o.auditBackPill}
               >
                 <Text style={o.auditBackPillText}>
-                  {auditTab ? '❮ เลือกหมวด' : '❮ หน้าหลัก'}
+                  {auditTab === 'ai' && aiCrop
+                    ? '❮ เลือกพืช'
+                    : auditTab
+                      ? '❮ เลือกหมวด'
+                      : '❮ หน้าหลัก'}
                 </Text>
               </TouchableOpacity>
 
@@ -1124,7 +1137,10 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
                       key={mod.key}
                       activeOpacity={0.82}
                       style={o.verticalMenuCard}
-                      onPress={() => setAuditTab(mod.key)}
+                      onPress={() => {
+                        setAuditTab(mod.key);
+                        if (mod.key === 'ai') setAiCrop(null);
+                      }}
                     >
                       <View style={[o.verticalMenuIconBox, { backgroundColor: mod.badgeBg }]}>
                         <Text style={{ fontSize: 22 }}>{mod.icon}</Text>
@@ -1148,7 +1164,12 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
                     <Text style={o.activeModuleStripText}>
                       หมวดที่เปิดอยู่: {AUDIT_MODULES.find((m) => m.key === auditTab)?.title}
                     </Text>
-                    <TouchableOpacity onPress={() => setAuditTab(null)}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setAuditTab(null);
+                        setAiCrop(null);
+                      }}
+                    >
                       <Text style={o.changeModuleLink}>เปลี่ยนหมวด</Text>
                     </TouchableOpacity>
                   </View>
@@ -1343,64 +1364,132 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
                   )}
 
                   {auditTab === 'ai' && (
-                    <View style={o.minimalCard}>
-                      <Text style={o.minimalCardTitle}>🔬 สแกนโรคพืช AI Scanner</Text>
-                      <Text style={[o.minimalCardSub, { marginBottom: 10 }]}>
-                        เลือกรูปใบหรือลำต้นเพื่อวิเคราะห์โรคและเก็บประวัติ
-                      </Text>
-
-                      <View style={o.scannerBox}>
-                        <Text style={{ fontSize: 32, marginBottom: 6 }}>📷</Text>
-                        <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#166534' }}>
-                          ถ่ายหรือเลือกรูปภาพแปลงผักไหม
-                        </Text>
-
-                        <TouchableOpacity
-                          style={[o.pillBtnPrimary, { marginTop: 12, paddingHorizontal: 20, opacity: aiLoading ? 0.7 : 1 }]}
-                          onPress={handleScanAI}
-                          disabled={aiLoading}
-                        >
-                          <Text style={o.pillBtnPrimaryText}>
-                            {aiLoading ? 'กำลังวิเคราะห์ด้วย AI...' : 'เริ่มวิเคราะห์ด้วย AI'}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      {(aiHistory[selectedFarmer?.id] || []).map((item) => (
-                        <View key={item.id} style={[o.aiResultBox, { marginTop: 12 }]}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                            <Image source={{ uri: item.image }} style={{ width: 56, height: 56, borderRadius: 10, marginRight: 10 }} />
-                            <View>
-                              <Text style={{ fontSize: 10, color: '#64748b' }}>เวลาที่สแกน</Text>
-                              <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1e293b' }}>{item.timestamp}</Text>
-                            </View>
-                          </View>
-
-                          <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#15803d' }}>
-                            ✓ ผลการวิเคราะห์ AI (ความมั่นใจ {item.result.accuracy})
-                          </Text>
-                          <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#b91c1c', marginTop: 4 }}>
-                            ตรวจพบ: {item.result.disease}
-                          </Text>
-                          <Text style={{ fontSize: 12, color: '#334155', marginTop: 3 }}>
-                            คำแนะนำ: {item.result.advice}
+                    !aiCrop ? (
+                      /* 🟢 ขั้นตอนเลือกชนิดพืช (ข้าว / ถั่วเหลือง) */
+                      <View style={o.verticalMenuWrapper}>
+                        <View style={o.verticalMenuBanner}>
+                          <Text style={o.verticalMenuBannerTitle}>เลือกชนิดพืชที่ต้องการสแกนด้วย AI</Text>
+                          <Text style={o.verticalMenuBannerSub}>
+                            แตะเลือกโมเดลพืชด้านล่างเพื่อเข้าสู่หน้าสแกนโรค
                           </Text>
                         </View>
-                      ))}
 
-                      {/* หมายเหตุตัวเล็กแบบไม่เด่น */}
-                      <Text
-                        style={{
-                          fontSize: 10,
-                          color: '#94a3b8',
-                          textAlign: 'center',
-                          marginTop: 12,
-                          lineHeight: 15,
-                        }}
-                      >
-                        * หมายเหตุ: ผลการวิเคราะห์โรคและธาตุอาหารเป็นเพียงการประเมินเบื้องต้นจากภาพถ่ายเท่านั้น โปรดตรวจสอบอาการในแปลงจริงอย่างละเอียดอีกครั้ง
-                      </Text>
-                    </View>
+                        <TouchableOpacity
+                          activeOpacity={0.82}
+                          style={o.verticalMenuCard}
+                          onPress={() => setAiCrop('rice')}
+                        >
+                          <View style={[o.verticalMenuIconBox, { backgroundColor: '#dcfce7' }]}>
+                            <Text style={{ fontSize: 24 }}>🌾</Text>
+                          </View>
+                          <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text style={o.verticalMenuTitle}>โมเดลตรวจโรคใบข้าว (Rice AI)</Text>
+                            <Text style={o.verticalMenuDesc}>
+                              วิเคราะห์ 4 โรคข้าวหลัก + ใบปกติ + ประเมินสีใบแนะนำปุ๋ย (DGCI)
+                            </Text>
+                          </View>
+                          <View style={o.verticalChevronCircle}>
+                            <Text style={{ color: '#15803d', fontWeight: 'bold', fontSize: 15 }}>›</Text>
+                          </View>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          activeOpacity={0.82}
+                          style={o.verticalMenuCard}
+                          onPress={() => setAiCrop('soybean')}
+                        >
+                          <View style={[o.verticalMenuIconBox, { backgroundColor: '#fef3c7' }]}>
+                            <Text style={{ fontSize: 24 }}>🫘</Text>
+                          </View>
+                          <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text style={o.verticalMenuTitle}>โมเดลตรวจโรคใบถั่วเหลือง (Soybean AI)</Text>
+                            <Text style={o.verticalMenuDesc}>
+                              วิเคราะห์โรคราสนิม ใบจุดตากบ ใบไหม้แบคทีเรีย และขาดโพแทสเซียม
+                            </Text>
+                          </View>
+                          <View style={o.verticalChevronCircle}>
+                            <Text style={{ color: '#b45309', fontWeight: 'bold', fontSize: 15 }}>›</Text>
+                          </View>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      /* 🟢 หน้าสแกน AI ของพืชที่เลือก */
+                      <View style={o.minimalCard}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text style={o.minimalCardTitle}>
+                            {aiCrop === 'soybean'
+                              ? '🫘 สแกนโรคใบถั่วเหลือง (Soybean AI)'
+                              : '🌾 สแกนโรคใบข้าว (Rice AI)'}
+                          </Text>
+                          <TouchableOpacity onPress={() => setAiCrop(null)}>
+                            <Text style={o.changeModuleLink}>เปลี่ยนพืช</Text>
+                          </TouchableOpacity>
+                        </View>
+                        <Text style={[o.minimalCardSub, { marginBottom: 10 }]}>
+                          {aiCrop === 'soybean'
+                            ? 'เลือกรูปใบถั่วเหลืองเพื่อวิเคราะห์โรคและเก็บประวัติ'
+                            : 'เลือกรูปใบข้าวเพื่อวิเคราะห์โรคและประเมินสีใบ'}
+                        </Text>
+
+                        <View style={o.scannerBox}>
+                          <Text style={{ fontSize: 32, marginBottom: 6 }}>📷</Text>
+                          <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#166534' }}>
+                            {aiCrop === 'soybean'
+                              ? 'ถ่ายหรือเลือกรูปภาพใบถั่วเหลือง'
+                              : 'ถ่ายหรือเลือกรูปภาพใบข้าวแปลงผักไหม'}
+                          </Text>
+
+                          <TouchableOpacity
+                            style={[o.pillBtnPrimary, { marginTop: 12, paddingHorizontal: 20, opacity: aiLoading ? 0.7 : 1 }]}
+                            onPress={handleScanAI}
+                            disabled={aiLoading}
+                          >
+                            <Text style={o.pillBtnPrimaryText}>
+                              {aiLoading ? 'กำลังวิเคราะห์ด้วย AI...' : 'เริ่มวิเคราะห์ด้วย AI'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        {(aiHistory[selectedFarmer?.id] || [])
+                          .filter((item) => (item.crop || 'rice') === aiCrop)
+                          .map((item) => (
+                            <View key={item.id} style={[o.aiResultBox, { marginTop: 12 }]}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                <Image source={{ uri: item.image }} style={{ width: 56, height: 56, borderRadius: 10, marginRight: 10 }} />
+                                <View>
+                                  <Text style={{ fontSize: 10, color: '#64748b' }}>
+                                    {item.crop === 'soybean' ? '🫘 โมเดลถั่วเหลือง' : '🌾 โมเดลข้าว'} · เวลาที่สแกน
+                                  </Text>
+                                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1e293b' }}>{item.timestamp}</Text>
+                                </View>
+                              </View>
+
+                              <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#15803d' }}>
+                                ✓ ผลการวิเคราะห์ AI (ความมั่นใจ {item.result.accuracy})
+                              </Text>
+                              <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#b91c1c', marginTop: 4 }}>
+                                ตรวจพบ: {item.result.disease}
+                              </Text>
+                              <Text style={{ fontSize: 12, color: '#334155', marginTop: 3 }}>
+                                คำแนะนำ: {item.result.advice}
+                              </Text>
+                            </View>
+                          ))}
+
+                        {/* หมายเหตุตัวเล็กแบบไม่เด่น */}
+                        <Text
+                          style={{
+                            fontSize: 10,
+                            color: '#94a3b8',
+                            textAlign: 'center',
+                            marginTop: 12,
+                            lineHeight: 15,
+                          }}
+                        >
+                          * หมายเหตุ: ผลการวิเคราะห์โรคและธาตุอาหารเป็นเพียงการประเมินเบื้องต้นจากภาพถ่ายเท่านั้น โปรดตรวจสอบอาการในแปลงจริงอย่างละเอียดอีกครั้ง
+                        </Text>
+                      </View>
+                    )
                   )}
 
                   {auditTab === 'sensor' && (
