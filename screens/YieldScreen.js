@@ -9,6 +9,8 @@ import {
   SafeAreaView,
   StatusBar,
 } from 'react-native';
+import VoiceTextInput from './VoiceTextInput';
+import ReadAloudLabel from '../components/ReadAloudLabel';
 import { notify } from '../utils/notify';
 import { PLOTS } from '../data/options';
 import { CROPS, SEED_SOURCES, RICE_TARGET } from '../data/profile';
@@ -18,6 +20,26 @@ export default function YieldScreen({ user, onSave, onClose }) {
   const [crop, setCrop] = useState(null);
   const [seed, setSeed] = useState(null);
   const [kg, setKg] = useState(400);
+  const [voiceNotes, setVoiceNotes] = useState({});
+  const [activeVoiceField, setActiveVoiceField] = useState(null);
+
+  const updateVoiceNote = (fieldKey, text) =>
+    setVoiceNotes((notes) => ({ ...notes, [fieldKey]: text }));
+
+  const handleVoiceListeningChange = (fieldKey, isListening) =>
+    setActiveVoiceField((active) =>
+      isListening ? fieldKey : active === fieldKey ? null : active
+    );
+
+  const renderVoiceInput = (fieldKey) => (
+    <VoiceTextInput
+      value={voiceNotes[fieldKey] || ''}
+      onChangeText={(text) => updateVoiceNote(fieldKey, text)}
+      fieldKey={fieldKey}
+      disabled={activeVoiceField !== null && activeVoiceField !== fieldKey}
+      onListeningChange={handleVoiceListeningChange}
+    />
+  );
 
   const save = () => {
     if (!plot) return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกแปลงนาก่อนบันทึก');
@@ -33,6 +55,7 @@ export default function YieldScreen({ user, onSave, onClose }) {
       crop,
       seedSource: seed,
       kgPerRai: kg,
+      voiceNotes,
       lot,
       summary: `ผลผลิต ${crop} · ${plot} · ${kg} กก./ไร่ · ${lot}`,
     });
@@ -57,7 +80,13 @@ export default function YieldScreen({ user, onSave, onClose }) {
         
         {/* ข้อ 1: แปลงนา */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>1. เลือกแปลงนา</Text>
+          <ReadAloudLabel
+            text="เลือกแปลงนา เพื่อระบุแปลงที่ต้องการบันทึกผลผลิต"
+            textStyle={[styles.cardTitle, { marginBottom: 0 }]}
+            containerStyle={styles.cardTitleRow}
+          >
+            1. เลือกแปลงนา
+          </ReadAloudLabel>
           <View style={styles.chipGroup}>
             {PLOTS.map((p) => {
               const isSelected = plot === p;
@@ -65,7 +94,7 @@ export default function YieldScreen({ user, onSave, onClose }) {
                 <TouchableOpacity
                   key={p}
                   style={[styles.chip, isSelected && styles.chipActive]}
-                  onPress={() => setPlot(p)}
+                  onPress={() => setPlot(isSelected ? null : p)}
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
@@ -75,11 +104,18 @@ export default function YieldScreen({ user, onSave, onClose }) {
               );
             })}
           </View>
+          {renderVoiceInput('plot')}
         </View>
 
         {/* ข้อ 2: ชนิดพืช */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>2. ชนิดพืช / พันธุ์ข้าว</Text>
+          <ReadAloudLabel
+            text="ชนิดพืชหรือพันธุ์ข้าว เลือกพืชที่ปลูกและต้องการบันทึกผลผลิต"
+            textStyle={[styles.cardTitle, { marginBottom: 0 }]}
+            containerStyle={styles.cardTitleRow}
+          >
+            2. ชนิดพืช / พันธุ์ข้าว
+          </ReadAloudLabel>
           <View style={styles.chipGroup}>
             {CROPS.map((c) => {
               const isSelected = crop === c;
@@ -87,7 +123,7 @@ export default function YieldScreen({ user, onSave, onClose }) {
                 <TouchableOpacity
                   key={c}
                   style={[styles.chip, isSelected && styles.chipActive]}
-                  onPress={() => setCrop(c)}
+                  onPress={() => setCrop(isSelected ? null : c)}
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
@@ -97,11 +133,18 @@ export default function YieldScreen({ user, onSave, onClose }) {
               );
             })}
           </View>
+          {renderVoiceInput('crop')}
         </View>
 
         {/* ข้อ 3: เมล็ดพันธุ์ */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>3. แหล่งที่มาเมล็ดพันธุ์</Text>
+          <ReadAloudLabel
+            text="แหล่งที่มาเมล็ดพันธุ์ เลือกแหล่งที่ได้มาของเมล็ดพันธุ์ที่ใช้ปลูก"
+            textStyle={[styles.cardTitle, { marginBottom: 0 }]}
+            containerStyle={styles.cardTitleRow}
+          >
+            3. แหล่งที่มาเมล็ดพันธุ์
+          </ReadAloudLabel>
           <View style={styles.chipGroup}>
             {SEED_SOURCES.map((x) => {
               const isSelected = seed === x;
@@ -109,7 +152,7 @@ export default function YieldScreen({ user, onSave, onClose }) {
                 <TouchableOpacity
                   key={x}
                   style={[styles.chip, isSelected && styles.chipActive]}
-                  onPress={() => setSeed(x)}
+                  onPress={() => setSeed(isSelected ? null : x)}
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
@@ -119,11 +162,18 @@ export default function YieldScreen({ user, onSave, onClose }) {
               );
             })}
           </View>
+          {renderVoiceInput('seed')}
         </View>
 
         {/* ข้อ 4: จำนวนผลผลิต */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>4. ผลผลิตที่ได้ (กิโลกรัมต่อไร่)</Text>
+          <ReadAloudLabel
+            text="ผลผลิตที่ได้ ระบุปริมาณผลผลิตเป็นกิโลกรัมต่อไร่ โดยใช้ปุ่มบวกหรือลบเพื่อปรับจำนวน"
+            textStyle={[styles.cardTitle, { marginBottom: 0 }]}
+            containerStyle={styles.cardTitleRow}
+          >
+            4. ผลผลิตที่ได้ (กิโลกรัมต่อไร่)
+          </ReadAloudLabel>
           <View style={styles.stepperContainer}>
             <TouchableOpacity
               style={styles.stepBtn}
@@ -154,6 +204,7 @@ export default function YieldScreen({ user, onSave, onClose }) {
               </Text>
             </View>
           )}
+          {renderVoiceInput('yield')}
         </View>
 
         {/* ปุ่มบันทึกใหญ่พิเศษ */}
@@ -220,6 +271,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#14532d',
+    marginBottom: 12,
+  },
+  cardTitleRow: {
     marginBottom: 12,
   },
   chipGroup: {

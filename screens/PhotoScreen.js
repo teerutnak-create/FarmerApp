@@ -16,6 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { PLOTS } from '../data/options';
 import { notify } from '../utils/notify';
+import ReadAloudLabel from '../components/ReadAloudLabel';
 
 export default function PhotoScreen({ onSave, onClose }) {
   const [plot, setPlot] = useState(null);
@@ -226,7 +227,13 @@ export default function PhotoScreen({ onSave, onClose }) {
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         {/* Card 1: เลือกแปลง */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>📍 เลือกแปลงนา</Text>
+          <ReadAloudLabel
+            text="เลือกแปลงนา เพื่อระบุแปลงที่จะถ่ายภาพและบันทึกพิกัด"
+            textStyle={[styles.cardTitle, { marginBottom: 0 }]}
+            containerStyle={styles.cardTitleRow}
+          >
+            📍 เลือกแปลงนา
+          </ReadAloudLabel>
           <View style={styles.chipContainer}>
             {PLOTS.map((x) => {
               const isSelected = plot === x;
@@ -267,7 +274,13 @@ export default function PhotoScreen({ onSave, onClose }) {
 
         {/* Card 2: ถ่ายรูป & พรีวิว */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>📷 รูปถ่ายแปลงนา</Text>
+          <ReadAloudLabel
+            text="รูปถ่ายแปลงนา ใช้ถ่ายและบันทึกภาพแปลง พร้อมเวลาและพิกัดจีพีเอสเมื่ออนุญาต"
+            textStyle={[styles.cardTitle, { marginBottom: 0 }]}
+            containerStyle={styles.cardTitleRow}
+          >
+            📷 รูปถ่ายแปลงนา
+          </ReadAloudLabel>
 
           <TouchableOpacity
             style={[styles.photoBtn, busy && styles.photoBtnDisabled]}
@@ -381,6 +394,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#14532d',
+    marginBottom: 12,
+  },
+  cardTitleRow: {
     marginBottom: 12,
   },
   chipContainer: {

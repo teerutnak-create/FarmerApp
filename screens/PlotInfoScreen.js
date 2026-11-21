@@ -9,6 +9,8 @@ import {
   SafeAreaView,
   StatusBar,
 } from 'react-native';
+import VoiceTextInput from './VoiceTextInput';
+import ReadAloudLabel from '../components/ReadAloudLabel';
 import { notify } from '../utils/notify';
 import { PLOTS } from '../data/options';
 import {
@@ -29,9 +31,29 @@ export default function PlotInfoScreen({ onSave, onClose }) {
   const [facilities, setFacilities] = useState([]);
   const [standards, setStandards] = useState([]);
   const [months, setMonths] = useState(12);
+  const [voiceNotes, setVoiceNotes] = useState({});
+  const [activeVoiceField, setActiveVoiceField] = useState(null);
 
   const toggle = (list, setList, x) =>
     setList(list.includes(x) ? list.filter((i) => i !== x) : [...list, x]);
+
+  const updateVoiceNote = (fieldKey, text) =>
+    setVoiceNotes((notes) => ({ ...notes, [fieldKey]: text }));
+
+  const handleVoiceListeningChange = (fieldKey, isListening) =>
+    setActiveVoiceField((active) =>
+      isListening ? fieldKey : active === fieldKey ? null : active
+    );
+
+  const renderVoiceInput = (fieldKey) => (
+    <VoiceTextInput
+      value={voiceNotes[fieldKey] || ''}
+      onChangeText={(text) => updateVoiceNote(fieldKey, text)}
+      fieldKey={fieldKey}
+      disabled={activeVoiceField !== null && activeVoiceField !== fieldKey}
+      onListeningChange={handleVoiceListeningChange}
+    />
+  );
 
   const hasCert = standards.some((x) => CERT_STANDARDS.includes(x));
 
@@ -40,7 +62,7 @@ export default function PlotInfoScreen({ onSave, onClose }) {
     if (!soil) return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกชนิดดิน');
     if (!chem) return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกประวัติการใช้สารเคมี');
 
-    const extra = { plot, rai, soil, chem, facilities, standards };
+    const extra = { plot, rai, soil, chem, facilities, standards, voiceNotes };
     if (hasCert) {
       extra.certExpiry = new Date(Date.now() + months * 30 * DAY).toISOString();
     }
@@ -70,7 +92,13 @@ export default function PlotInfoScreen({ onSave, onClose }) {
         
         {/* ข้อ 1: เลือกแปลงนา */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>1. เลือกแปลงนาของท่าน</Text>
+          <ReadAloudLabel
+            text="เลือกแปลงนาของท่าน เพื่อระบุแปลงที่ต้องการบันทึกข้อมูล"
+            textStyle={[styles.cardTitle, { marginBottom: 0 }]}
+            containerStyle={styles.cardTitleRow}
+          >
+            1. เลือกแปลงนาของท่าน
+          </ReadAloudLabel>
           <View style={styles.chipGroup}>
             {PLOTS.map((p) => {
               const isSelected = plot === p;
@@ -78,7 +106,7 @@ export default function PlotInfoScreen({ onSave, onClose }) {
                 <TouchableOpacity
                   key={p}
                   style={[styles.chip, isSelected && styles.chipActive]}
-                  onPress={() => setPlot(p)}
+                  onPress={() => setPlot(isSelected ? null : p)}
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
@@ -88,11 +116,18 @@ export default function PlotInfoScreen({ onSave, onClose }) {
               );
             })}
           </View>
+          {renderVoiceInput('plot')}
         </View>
 
         {/* ข้อ 2: ขนาดแปลงนา */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>2. ขนาดแปลงนา (ไร่)</Text>
+          <ReadAloudLabel
+            text="ขนาดแปลงนา ระบุพื้นที่ของแปลงเป็นหน่วยไร่"
+            textStyle={[styles.cardTitle, { marginBottom: 0 }]}
+            containerStyle={styles.cardTitleRow}
+          >
+            2. ขนาดแปลงนา (ไร่)
+          </ReadAloudLabel>
           <View style={styles.stepperContainer}>
             <TouchableOpacity
               style={styles.stepBtn}
@@ -115,11 +150,18 @@ export default function PlotInfoScreen({ onSave, onClose }) {
               <Text style={styles.stepBtnText}>+</Text>
             </TouchableOpacity>
           </View>
+          {renderVoiceInput('area')}
         </View>
 
         {/* ข้อ 3: ชนิดดิน */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>3. ชนิดดินในแปลง</Text>
+          <ReadAloudLabel
+            text="ชนิดดินในแปลง เลือกประเภทดินที่พบในแปลงนา"
+            textStyle={[styles.cardTitle, { marginBottom: 0 }]}
+            containerStyle={styles.cardTitleRow}
+          >
+            3. ชนิดดินในแปลง
+          </ReadAloudLabel>
           <View style={styles.chipGroup}>
             {SOILS.map((x) => {
               const isSelected = soil === x;
@@ -127,7 +169,7 @@ export default function PlotInfoScreen({ onSave, onClose }) {
                 <TouchableOpacity
                   key={x}
                   style={[styles.chip, isSelected && styles.chipActive]}
-                  onPress={() => setSoil(x)}
+                  onPress={() => setSoil(isSelected ? null : x)}
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
@@ -137,11 +179,18 @@ export default function PlotInfoScreen({ onSave, onClose }) {
               );
             })}
           </View>
+          {renderVoiceInput('soil')}
         </View>
 
         {/* ข้อ 4: ประวัติสารเคมี */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>4. ประวัติการใช้สารเคมี</Text>
+          <ReadAloudLabel
+            text="ประวัติการใช้สารเคมี เลือกข้อมูลการใช้สารเคมีในแปลง"
+            textStyle={[styles.cardTitle, { marginBottom: 0 }]}
+            containerStyle={styles.cardTitleRow}
+          >
+            4. ประวัติการใช้สารเคมี
+          </ReadAloudLabel>
           <View style={styles.chipGroup}>
             {CHEM_HISTORY.map((x) => {
               const isSelected = chem === x;
@@ -149,7 +198,7 @@ export default function PlotInfoScreen({ onSave, onClose }) {
                 <TouchableOpacity
                   key={x}
                   style={[styles.chip, isSelected && styles.chipActive]}
-                  onPress={() => setChem(x)}
+                  onPress={() => setChem(isSelected ? null : x)}
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
@@ -159,11 +208,18 @@ export default function PlotInfoScreen({ onSave, onClose }) {
               );
             })}
           </View>
+          {renderVoiceInput('chemical')}
         </View>
 
         {/* ข้อ 5: สิ่งที่มีในแปลง */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>5. สิ่งที่มีในแปลง (เลือกได้หลายข้อ)</Text>
+          <ReadAloudLabel
+            text="สิ่งที่มีในแปลง เลือกสิ่งอำนวยความสะดวกหรือทรัพยากรที่มีได้หลายข้อ"
+            textStyle={[styles.cardTitle, { marginBottom: 0 }]}
+            containerStyle={styles.cardTitleRow}
+          >
+            5. สิ่งที่มีในแปลง (เลือกได้หลายข้อ)
+          </ReadAloudLabel>
           <View style={styles.chipGroup}>
             {FACILITIES.map((x) => {
               const isSelected = facilities.includes(x);
@@ -181,11 +237,18 @@ export default function PlotInfoScreen({ onSave, onClose }) {
               );
             })}
           </View>
+          {renderVoiceInput('facilities')}
         </View>
 
         {/* ข้อ 6: มาตรฐานที่มี */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>6. มาตรฐานรับรอง (เลือกได้หลายข้อ)</Text>
+          <ReadAloudLabel
+            text="มาตรฐานรับรอง เลือกมาตรฐานที่แปลงได้รับหรือกำลังดำเนินการได้หลายข้อ"
+            textStyle={[styles.cardTitle, { marginBottom: 0 }]}
+            containerStyle={styles.cardTitleRow}
+          >
+            6. มาตรฐานรับรอง (เลือกได้หลายข้อ)
+          </ReadAloudLabel>
           <View style={styles.chipGroup}>
             {STANDARDS.map((x) => {
               const isSelected = standards.includes(x);
@@ -203,10 +266,17 @@ export default function PlotInfoScreen({ onSave, onClose }) {
               );
             })}
           </View>
+          {renderVoiceInput('standards')}
 
           {hasCert && (
             <View style={styles.certExpiryBox}>
-              <Text style={styles.cardTitle}>ใบรับรองหมดอายุในอีก (เดือน)</Text>
+              <ReadAloudLabel
+                text="ใบรับรองหมดอายุในอีกกี่เดือน ระบุระยะเวลาที่เหลือก่อนใบรับรองหมดอายุ"
+                textStyle={[styles.cardTitle, { marginBottom: 0 }]}
+                containerStyle={styles.cardTitleRow}
+              >
+                ใบรับรองหมดอายุในอีก (เดือน)
+              </ReadAloudLabel>
               <View style={styles.stepperContainer}>
                 <TouchableOpacity
                   style={styles.stepBtn}
@@ -297,6 +367,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#14532d',
+    marginBottom: 12,
+  },
+  cardTitleRow: {
     marginBottom: 12,
   },
   chipGroup: {

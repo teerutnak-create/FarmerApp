@@ -1,4 +1,5 @@
 import { getSensorContext } from '../lib/sensorContext.js';
+import { getWeatherContext } from '../lib/weatherContext.js';
 
 const PREFERRED_MODELS = [
   'gemini-3.5-flash-lite',
@@ -18,6 +19,8 @@ const SYSTEM = `คุณคือ "ผู้ช่วยเกษตรอั�
 - ระบุพื้นที่ติดต่อจากตำบล/อำเภอที่ผู้ใช้แจ้งหรือข้อมูลเกษตรกรที่ยืนยันแล้วเท่านั้น หากไม่มีข้อมูล ให้ระบุว่า "พื้นที่ตัวอย่าง: พื้นที่ของเกษตรกร" หรือถามตำบล/อำเภอ ห้ามเดาพื้นที่จริง
 - หากถูกถามหาเบอร์หรือช่องทางจริง ให้แจ้งว่าไม่มีข้อมูลยืนยันในระบบ และแนะนำให้ขอช่องทางจากสำนักงานหรือประกาศทางการของหน่วยงาน
 - ห้ามแต่งตัวเลขหรือข้อมูลที่ไม่มั่นใจ ถ้าไม่รู้ให้บอกตรงๆ
+- เมื่อตอบเรื่องอุณหภูมิ สภาพฟ้า ฝน ลม แสงแดด หรือ UV ให้ใช้ข้อมูลพยากรณ์อากาศ Open-Meteo ที่แนบมาเท่านั้น และบอกว่าเป็นข้อมูลจากจุดอ้างอิงส่วนกลางของแอป ไม่ใช่ค่าจากเซนเซอร์หรือพิกัดเฉพาะแปลง
+- ห้ามใช้ค่าความชื้นจากพยากรณ์อากาศ ค่าความชื้น/ความชื้นดินให้อ้างอิงข้อมูลเซนเซอร์ ESP32 ที่แนบมาเท่านั้น หากไม่มีหรือเก่าให้แจ้งตามจริงและห้ามคาดเดา
 - เมื่อตอบคำถามเกี่ยวกับค่าจากบอร์ดหรือเซนเซอร์ ให้ใช้ข้อมูลเซนเซอร์ที่แนบมาด้านล่างเท่านั้น หากไม่มีข้อมูลหรือข้อมูลเก่า ให้แจ้งตามนั้นและห้ามคาดเดา
 - ใช้ข้อมูลของเกษตรกรด้านล่างประกอบคำตอบเมื่อเกี่ยวข้อง
 
@@ -51,6 +54,23 @@ export default async function handler(req, res) {
 
   try {
     let sensorContext = '';
+    let weatherContext = '';
+    const asksAboutWeather = messages.some((message) =>
+      /อากาศ|พยากรณ์|อุณหภูมิ|ร้อน|หนาว|ฝน|แดด|แสงแดด|เมฆ|ลม|ฟ้าครึ้ม|ตากข้าว|ตากเมล็ด|รดน้ำ|ให้น้ำ|ชลประทาน|เตรียมดิน|ดำนา|ไถนา|พ่น|ฉีด|หว่าน|ปลูก|ปุ๋ย|เกี่ยว|เก็บเกี่ยว|weather|forecast|temperature|rain|sunlight|wind|uv/i.test(
+        String(message.content || '')
+      )
+    );
+    if (asksAboutWeather) {
+      try {
+        weatherContext = await getWeatherContext(controller.signal);
+      } catch (weatherError) {
+        if (controller.signal.aborted) return;
+        console.error('Reading Open-Meteo weather context failed:', weatherError);
+        weatherContext =
+          '\n\nข้อมูลพยากรณ์อากาศ Open-Meteo: ดึงข้อมูลไม่ได้ในขณะนี้ ห้ามคาดเดาอุณหภูมิ ฝน ลม หรือแสงแดด';
+      }
+    }
+
     const asksAboutMoisture = messages.some((message) =>
       /ความชื้น|esp32|เซนเซอร์|sensor|moisture|บอร์ด|ค่าล่าสุด|ค่าปัจจุบัน/i.test(
         String(message.content || '')
@@ -88,7 +108,13 @@ export default async function handler(req, res) {
 
       const payload = JSON.stringify({
         systemInstruction: {
-          parts: [{ text: SYSTEM + String(context).slice(0, 3000) + sensorContext.slice(0, 3000) }],
+          parts: [{
+            text:
+              SYSTEM +
+              String(context).slice(0, 3000) +
+              weatherContext.slice(0, 3000) +
+              sensorContext.slice(0, 3000),
+          }],
         },
         contents,
         generationConfig: genConfig,
