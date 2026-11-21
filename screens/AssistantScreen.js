@@ -12,6 +12,7 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
 } from 'react-native';
+import * as Speech from 'expo-speech';
 import { requestAssistant } from '../lib/assistantApi';
 
 const WELCOME_MESSAGE = {
@@ -49,6 +50,7 @@ export default function AssistantScreen(props) {
     return () => {
       assistantRequestRef.current?.abort();
       assistantRequestRef.current = null;
+      Speech.stop().catch((error) => console.error('Stopping assistant speech failed:', error));
 
       if (speechRecognitionRef.current) {
         const recognition = speechRecognitionRef.current;
@@ -92,6 +94,16 @@ export default function AssistantScreen(props) {
   const handleClearChat = () => {
     if (loading) return;
     setMessages([WELCOME_MESSAGE]);
+  };
+
+  const speakAnswer = (content) => {
+    Speech.stop().catch((error) => console.error('Stopping previous assistant speech failed:', error));
+    Speech.speak(content, {
+      language: 'th-TH',
+      rate: 0.9,
+      volume: 1,
+      onError: (error) => console.error('Reading assistant answer failed:', error),
+    });
   };
 
   const handleVoiceInput = async () => {
@@ -313,6 +325,17 @@ export default function AssistantScreen(props) {
                   >
                     {msg.content}
                   </Text>
+                  {!isUser && !msg.isError && (
+                    <TouchableOpacity
+                      style={styles.speakButton}
+                      onPress={() => speakAnswer(msg.content)}
+                      activeOpacity={0.75}
+                      accessibilityRole="button"
+                      accessibilityLabel="ฟังคำตอบของผู้ช่วย AI"
+                    >
+                      <Text style={styles.speakButtonText}>🔊 ฟังคำตอบ</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
             );
@@ -489,6 +512,19 @@ const styles = StyleSheet.create({
   },
   aiText: {
     color: '#222222',
+  },
+  speakButton: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: '#e8f5e9',
+  },
+  speakButtonText: {
+    color: '#1b5e20',
+    fontSize: 13,
+    fontWeight: '600',
   },
   errorText: {
     color: '#c62828',

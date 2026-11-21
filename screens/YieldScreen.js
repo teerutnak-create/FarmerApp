@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   StatusBar,
 } from 'react-native';
+import ReadAloudLabel from '../components/ReadAloudLabel';
 import { notify } from '../utils/notify';
 import { PLOTS } from '../data/options';
 import { CROPS, SEED_SOURCES, RICE_TARGET } from '../data/profile';
@@ -57,7 +58,13 @@ export default function YieldScreen({ user, onSave, onClose }) {
         
         {/* ข้อ 1: แปลงนา */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>1. เลือกแปลงนา</Text>
+          <ReadAloudLabel
+            text="เลือกแปลงนา เพื่อระบุแปลงที่ต้องการบันทึกผลผลิต"
+            textStyle={[styles.cardTitle, { marginBottom: 0 }]}
+            containerStyle={styles.cardTitleRow}
+          >
+            1. เลือกแปลงนา
+          </ReadAloudLabel>
           <View style={styles.chipGroup}>
             {PLOTS.map((p) => {
               const isSelected = plot === p;
@@ -79,7 +86,13 @@ export default function YieldScreen({ user, onSave, onClose }) {
 
         {/* ข้อ 2: ชนิดพืช */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>2. ชนิดพืช / พันธุ์ข้าว</Text>
+          <ReadAloudLabel
+            text="ชนิดพืชหรือพันธุ์ข้าว เลือกพืชที่ปลูกและต้องการบันทึกผลผลิต"
+            textStyle={[styles.cardTitle, { marginBottom: 0 }]}
+            containerStyle={styles.cardTitleRow}
+          >
+            2. ชนิดพืช / พันธุ์ข้าว
+          </ReadAloudLabel>
           <View style={styles.chipGroup}>
             {CROPS.map((c) => {
               const isSelected = crop === c;
@@ -101,7 +114,13 @@ export default function YieldScreen({ user, onSave, onClose }) {
 
         {/* ข้อ 3: เมล็ดพันธุ์ */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>3. แหล่งที่มาเมล็ดพันธุ์</Text>
+          <ReadAloudLabel
+            text="แหล่งที่มาเมล็ดพันธุ์ เลือกแหล่งที่ได้มาของเมล็ดพันธุ์ที่ใช้ปลูก"
+            textStyle={[styles.cardTitle, { marginBottom: 0 }]}
+            containerStyle={styles.cardTitleRow}
+          >
+            3. แหล่งที่มาเมล็ดพันธุ์
+          </ReadAloudLabel>
           <View style={styles.chipGroup}>
             {SEED_SOURCES.map((x) => {
               const isSelected = seed === x;
@@ -123,7 +142,13 @@ export default function YieldScreen({ user, onSave, onClose }) {
 
         {/* ข้อ 4: จำนวนผลผลิต */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>4. ผลผลิตที่ได้ (กิโลกรัมต่อไร่)</Text>
+          <ReadAloudLabel
+            text="ผลผลิตที่ได้ ระบุปริมาณผลผลิตเป็นกิโลกรัมต่อไร่ โดยใช้ปุ่มบวกหรือลบเพื่อปรับจำนวน"
+            textStyle={[styles.cardTitle, { marginBottom: 0 }]}
+            containerStyle={styles.cardTitleRow}
+          >
+            4. ผลผลิตที่ได้ (กิโลกรัมต่อไร่)
+          </ReadAloudLabel>
           <View style={styles.stepperContainer}>
             <TouchableOpacity
               style={styles.stepBtn}
@@ -220,6 +245,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#14532d',
+    marginBottom: 12,
+  },
+  cardTitleRow: {
     marginBottom: 12,
   },
   chipGroup: {

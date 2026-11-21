@@ -4,6 +4,7 @@ import {
   Text,
   TouchableOpacity,
   TextInput,
+  Image,
   ScrollView,
   SafeAreaView,
   StyleSheet,
@@ -12,6 +13,8 @@ import {
   Switch,
   Modal,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import ReadAloudLabel from '../components/ReadAloudLabel';
 
 export default function DailyLogScreen({ onSave, onClose, isOfficer = false, targetFarmer = null, initialData = null }) {
   // 🟢 ธีมสีสลับตาม Role
@@ -55,28 +58,34 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
   const [inputQuantity, setInputQuantity] = useState('1 ถุง/กระสอบ');
   const [inputNote, setInputNote] = useState('');
   const [inputNotDone, setInputNotDone] = useState(false);
+  const [inputPhoto, setInputPhoto] = useState(null);
 
   // 4. น้ำหมัก/สารทำเอง & ขออนุมัติ
   const [selfMadeFormula, setSelfMadeFormula] = useState('น้ำหมักชีวภาพ');
   const [requestIcsApproval, setRequestIcsApproval] = useState(true);
   const [selfMadeNote, setSelfMadeNote] = useState('');
   const [selfMadeNotDone, setSelfMadeNotDone] = useState(false);
+  const [selfMadePhoto, setSelfMadePhoto] = useState(null);
 
   // 5. การจัดการน้ำ
   const [waterSource, setWaterSource] = useState('บ่อน้ำประจำแปลง');
   const [waterLevel, setWaterLevel] = useState('ปกติ');
   const [waterNote, setWaterNote] = useState('');
   const [waterNotDone, setWaterNotDone] = useState(false);
+  const [waterPhoto, setWaterPhoto] = useState(null);
 
   // 6. แรงงาน
   const [workerType, setWorkerType] = useState('ทำเองในครัวเรือน');
   const [workerNote, setWorkerNote] = useState('');
   const [workerNotDone, setWorkerNotDone] = useState(false);
+  const [workerPhoto, setWorkerPhoto] = useState(null);
 
   const [additionalActivity, setAdditionalActivity] = useState('');
+  const [additionalActivityPhoto, setAdditionalActivityPhoto] = useState(null);
 
   // 7. ความชื้น
   const [moistureValue, setMoistureValue] = useState('');
+  const [moisturePhoto, setMoisturePhoto] = useState(null);
 
   useEffect(() => {
     if (initialData) {
@@ -97,6 +106,7 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
         if (initialData.input.quantity) setInputQuantity(initialData.input.quantity);
         if (initialData.input.note) setInputNote(initialData.input.note);
         if (initialData.input.notDone !== undefined) setInputNotDone(initialData.input.notDone);
+        if (initialData.input.photoUri) setInputPhoto({ uri: initialData.input.photoUri });
       }
 
       if (initialData.selfMade) {
@@ -104,6 +114,7 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
         if (initialData.selfMade.icsRequested !== undefined) setRequestIcsApproval(initialData.selfMade.icsRequested);
         if (initialData.selfMade.note) setSelfMadeNote(initialData.selfMade.note);
         if (initialData.selfMade.notDone !== undefined) setSelfMadeNotDone(initialData.selfMade.notDone);
+        if (initialData.selfMade.photoUri) setSelfMadePhoto({ uri: initialData.selfMade.photoUri });
       }
 
       if (initialData.water) {
@@ -111,13 +122,19 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
         if (initialData.water.level) setWaterLevel(initialData.water.level);
         if (initialData.water.note) setWaterNote(initialData.water.note);
         if (initialData.water.notDone !== undefined) setWaterNotDone(initialData.water.notDone);
+        if (initialData.water.photoUri) setWaterPhoto({ uri: initialData.water.photoUri });
       }
 
       if (initialData.worker) setWorkerType(initialData.worker);
       if (initialData.workerNote) setWorkerNote(initialData.workerNote);
       if (initialData.workerNotDone !== undefined) setWorkerNotDone(initialData.workerNotDone);
+      if (initialData.workerPhotoUri) setWorkerPhoto({ uri: initialData.workerPhotoUri });
       if (initialData.additionalActivity) setAdditionalActivity(initialData.additionalActivity);
+      if (initialData.additionalActivityPhotoUri) {
+        setAdditionalActivityPhoto({ uri: initialData.additionalActivityPhotoUri });
+      }
       if (initialData.moisture !== undefined) setMoistureValue(initialData.moisture.toString());
+      if (initialData.moisturePhotoUri) setMoisturePhoto({ uri: initialData.moisturePhotoUri });
     }
   }, [initialData]);
 
@@ -130,11 +147,73 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
     }
   };
 
+  const takePhoto = async (setPhoto) => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        showAlert('ต้องอนุญาตใช้กล้อง', 'กรุณาอนุญาตให้แอปใช้กล้องแล้วลองอีกครั้ง');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({ quality: 0.5 });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        setPhoto({ uri: result.assets[0].uri });
+      }
+    } catch (error) {
+      console.error('Capturing daily log photo failed:', error);
+      showAlert('ถ่ายรูปไม่สำเร็จ', 'กรุณาลองถ่ายรูปอีกครั้ง');
+    }
+  };
+
+  const renderPhotoField = (photo, setPhoto, sectionName) => (
+    <View style={styles.photoField}>
+      <Text style={styles.photoFieldLabel}>รูปประกอบหัวข้อนี้ (ไม่บังคับ)</Text>
+      <TouchableOpacity
+        style={[styles.photoButton, { backgroundColor: themePrimary }]}
+        onPress={() => takePhoto(setPhoto)}
+        accessibilityRole="button"
+        accessibilityLabel={`ถ่ายรูปประกอบ${sectionName}`}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.photoButtonText}>
+          {photo ? '📷 ถ่ายรูปใหม่' : '📷 ถ่ายรูปประกอบ'}
+        </Text>
+      </TouchableOpacity>
+      {photo && (
+        <View style={styles.photoPreviewContainer}>
+          <Image
+            source={{ uri: photo.uri }}
+            style={styles.photoPreview}
+            accessibilityLabel={`รูปประกอบ${sectionName}`}
+          />
+          <TouchableOpacity
+            onPress={() => setPhoto(null)}
+            accessibilityRole="button"
+            accessibilityLabel={`ลบรูปประกอบ${sectionName}`}
+            hitSlop={8}
+          >
+            <Text style={styles.removePhotoText}>ลบรูป</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+
   // 🎙️ สถานะการฟังเสียง (เก็บชื่อหมวดที่กำลังฟังอยู่)
   const [listeningSection, setListeningSection] = useState(null);
   const recognitionRef = React.useRef(null);
+  const nativeVoiceRef = React.useRef(null);
 
-  const handleSpeechToText = (currentText, setTextFunc, sectionName) => {
+  useEffect(() => () => {
+    if (nativeVoiceRef.current) {
+      nativeVoiceRef.current.destroy().catch((error) => {
+        console.error('Cleaning up plot voice recognition failed:', error);
+      });
+      nativeVoiceRef.current = null;
+    }
+  }, []);
+
+  const handleSpeechToText = (currentText, setTextFunc, sectionName, replaceText = false) => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') {
       showAlert('แจ้งเตือน', 'ฟีเจอร์พูดเพื่อพิมพ์ใช้ได้บนเว็บเท่านั้นในตอนนี้');
       return;
@@ -154,13 +233,17 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
 
     const rec = new SR();
     rec.lang = 'th-TH';
-    rec.interimResults = false;
+    rec.interimResults = replaceText;
     rec.continuous = false;
 
     rec.onstart = () => setListeningSection(sectionName);
     rec.onresult = (e) => {
       const text = e.results[0][0].transcript;
-      setTextFunc((prev) => (prev ? `${prev} ${text}` : text));
+      if (replaceText) {
+        setTextFunc(text);
+      } else {
+        setTextFunc((prev) => (prev ? `${prev} ${text}` : text));
+      }
     };
     rec.onerror = (e) => {
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
@@ -181,6 +264,55 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
     }
   };
 
+  const handlePlotVoice = async () => {
+    if (Platform.OS === 'web') {
+      handleSpeechToText(selectedPlot, setSelectedPlot, 'เลือกแปลง', true);
+      return;
+    }
+
+    if (listeningSection === 'เลือกแปลง' && nativeVoiceRef.current) {
+      try {
+        await nativeVoiceRef.current.stop();
+      } catch (error) {
+        console.error('Stopping plot voice recognition failed:', error);
+        showAlert('หยุดฟังไม่สำเร็จ', 'กรุณาลองอีกครั้ง');
+      }
+      return;
+    }
+
+    try {
+      const Voice = require('@react-native-voice/voice').default;
+      nativeVoiceRef.current = Voice;
+      const available = await Voice.isAvailable();
+      if (!available) {
+        showAlert('ไม่รองรับการรู้จำเสียง', 'กรุณาตรวจสอบบริการแปลงเสียงเป็นข้อความในอุปกรณ์');
+        return;
+      }
+
+      Voice.onSpeechResults = (event) => {
+        const transcript = event.value?.[0]?.trim();
+        if (transcript) setSelectedPlot(transcript);
+      };
+      Voice.onSpeechPartialResults = (event) => {
+        const transcript = event.value?.[0]?.trim();
+        if (transcript) setSelectedPlot(transcript);
+      };
+      Voice.onSpeechEnd = () => setListeningSection(null);
+      Voice.onSpeechError = (event) => {
+        setListeningSection(null);
+        console.error('Plot voice recognition failed:', event.error);
+        showAlert('จับเสียงไม่สำเร็จ', 'กรุณาอนุญาตใช้ไมโครโฟนแล้วลองอีกครั้ง');
+      };
+
+      setListeningSection('เลือกแปลง');
+      await Voice.start('th-TH');
+    } catch (error) {
+      setListeningSection(null);
+      console.error('Starting plot voice recognition failed:', error);
+      showAlert('เริ่มฟังเสียงไม่สำเร็จ', 'กรุณาตรวจสอบสิทธิ์ไมโครโฟนแล้วลองอีกครั้ง');
+    }
+  };
+
   // 🟢 ฟังก์ชันบันทึกข้อมูล พร้อมแสดงป๊อปอัปแจ้งเตือนและเด้งกลับหน้าหลักทันทีเมื่อกด OK
   const handleSave = () => {
     const formattedDate = `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
@@ -194,24 +326,30 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
         quantity: inputQuantity,
         note: inputNote,
         notDone: inputNotDone,
+        photoUri: inputPhoto?.uri,
       },
       selfMade: {
         formula: selfMadeFormula,
         icsRequested: requestIcsApproval,
         note: selfMadeNote,
         notDone: selfMadeNotDone,
+        photoUri: selfMadePhoto?.uri,
       },
       water: {
         source: waterSource,
         level: waterLevel,
         note: waterNote,
         notDone: waterNotDone,
+        photoUri: waterPhoto?.uri,
       },
       worker: workerType,
       workerNote,
       workerNotDone,
+      workerPhotoUri: workerPhoto?.uri,
       additionalActivity,
+      additionalActivityPhotoUri: additionalActivityPhoto?.uri,
       moisture: moistureValue ? parseFloat(moistureValue) : undefined,
+      moisturePhotoUri: moisturePhoto?.uri,
       category: 'ACTIVITY',
       timestamp: new Date().toISOString(),
     };
@@ -256,9 +394,23 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
 
         {/* 1. เลือก วัน / เดือน / ปี (พ.ศ.) */}
         <View style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: themePrimary }]}>📅 1. เลือกวันที่ และ กิจกรรมในแปลง</Text>
+          <ReadAloudLabel
+            text="วันที่และกิจกรรมในแปลง ใช้บันทึกวันที่ทำกิจกรรม แปลงที่ทำ และกิจกรรมที่ดำเนินการ"
+            color={themePrimary}
+            textStyle={[styles.sectionTitle, { color: themePrimary }]}
+            containerStyle={styles.sectionTitleRow}
+          >
+            📅 1. เลือกวันที่ และ กิจกรรมในแปลง
+          </ReadAloudLabel>
           
-          <Text style={styles.label}>วันที่บันทึกกิจกรรม (วัน / เดือน / ปี พ.ศ.):</Text>
+          <ReadAloudLabel
+            text="วันที่บันทึกกิจกรรม ใช้ระบุวัน เดือน และปีพุทธศักราชที่ทำกิจกรรมในแปลง"
+            color={themePrimary}
+            textStyle={styles.label}
+            containerStyle={styles.labelRow}
+          >
+            วันที่บันทึกกิจกรรม (วัน / เดือน / ปี พ.ศ.):
+          </ReadAloudLabel>
           <View style={styles.dateSelectorRow}>
             <View style={styles.selectBoxContainer}>
               <Text style={styles.selectBoxLabel}>วัน</Text>
@@ -302,13 +454,20 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
             </View>
           </View>
 
-          <Text style={styles.label}>เลือกแปลงของคุณ:</Text>
+          <ReadAloudLabel
+            text="เลือกแปลงที่ทำกิจกรรม เพื่อระบุว่าข้อมูลนี้เป็นของแปลงใด"
+            color={themePrimary}
+            textStyle={styles.label}
+            containerStyle={styles.labelRow}
+          >
+            เลือกแปลงของคุณ:
+          </ReadAloudLabel>
           <View style={styles.chipGroup}>
             {['แปลงหลัก', 'แปลงที่ 2', 'แปลงผักไหม'].map((p) => (
               <TouchableOpacity
                 key={p}
                 style={[styles.bigChip, selectedPlot === p && { backgroundColor: themeActiveBg, borderColor: themeActiveBorder }]}
-                onPress={() => setSelectedPlot(p)}
+                onPress={() => setSelectedPlot((current) => current === p ? '' : p)}
               >
                 <Text style={[styles.bigChipText, selectedPlot === p && { color: themeActiveBorder, fontWeight: 'bold' }]}>
                   {selectedPlot === p ? `✓ ${p}` : p}
@@ -316,14 +475,42 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
               </TouchableOpacity>
             ))}
           </View>
+          <View style={[styles.plotVoiceContainer, { borderColor: themeBorder }]}>
+            <TextInput
+              style={styles.plotVoiceInput}
+              placeholder="พิมพ์ชื่อแปลง หรือกดพูดเพื่อเลือกแปลง"
+              placeholderTextColor="#9ca3af"
+              value={selectedPlot}
+              onChangeText={setSelectedPlot}
+              accessibilityLabel="ชื่อแปลงนา"
+            />
+            <TouchableOpacity
+              style={[styles.micBtn, { backgroundColor: themePrimary }]}
+              onPress={handlePlotVoice}
+              accessibilityRole="button"
+              accessibilityLabel={listeningSection === 'เลือกแปลง' ? 'หยุดฟังชื่อแปลง' : 'พูดชื่อแปลง'}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.micBtnText}>
+                {listeningSection === 'เลือกแปลง' ? '🔴 กำลังฟัง... (กดเพื่อหยุด)' : '🎙️ พูดชื่อแปลง'}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-          <Text style={styles.label}>วันนี้ทำอะไรในแปลง:</Text>
+          <ReadAloudLabel
+            text="เลือกกิจกรรมที่ทำในแปลงวันนี้ เช่น เตรียมดิน ปลูก ใส่ปุ๋ย กำจัดวัชพืช ให้น้ำ หรือเก็บเกี่ยว"
+            color={themePrimary}
+            textStyle={styles.label}
+            containerStyle={styles.labelRow}
+          >
+            วันนี้ทำอะไรในแปลง:
+          </ReadAloudLabel>
           <View style={styles.chipGroup}>
             {['เตรียมดิน', 'ปลูก', 'ใส่ปุ๋ย', 'กำจัดวัชพืช', 'ให้น้ำ', 'เก็บเกี่ยว'].map((act) => (
               <TouchableOpacity
                 key={act}
                 style={[styles.bigChip, selectedActivity === act && { backgroundColor: themeActiveBg, borderColor: themeActiveBorder }]}
-                onPress={() => setSelectedActivity(act)}
+                onPress={() => setSelectedActivity((current) => current === act ? '' : act)}
               >
                 <Text style={[styles.bigChipText, selectedActivity === act && { color: themeActiveBorder, fontWeight: 'bold' }]}>
                   {selectedActivity === act ? `✓ ${act}` : act}
@@ -332,7 +519,14 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
             ))}
           </View>
 
-          <Text style={[styles.subLabel, { color: themePrimary }]}>รายละเอียดกิจกรรมเพิ่มเติม:</Text>
+          <ReadAloudLabel
+            text="รายละเอียดกิจกรรมเพิ่มเติม ใช้บันทึกข้อมูลที่ต้องการอธิบายเพิ่มจากกิจกรรมที่เลือก"
+            color={themePrimary}
+            textStyle={[styles.subLabel, { color: themePrimary }]}
+            containerStyle={styles.labelRow}
+          >
+            รายละเอียดกิจกรรมเพิ่มเติม:
+          </ReadAloudLabel>
           <View style={[styles.speechInputContainer, { borderColor: themeBorder }]}>
             <TextInput
               style={styles.speechInput}
@@ -349,7 +543,14 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
 
         {/* 2. ปัจจัยการผลิตที่ใช้ */}
         <View style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: themePrimary }]}>📦 2. ปุ๋ยและปัจจัยที่ใช้</Text>
+          <ReadAloudLabel
+            text="ปุ๋ยและปัจจัยที่ใช้ ใช้บันทึกชนิดและปริมาณของปุ๋ย เมล็ดพันธุ์ หรือวัสดุที่ใช้ในการเพาะปลูก"
+            color={themePrimary}
+            textStyle={[styles.sectionTitle, { color: themePrimary }]}
+            containerStyle={styles.sectionTitleRow}
+          >
+            📦 2. ปุ๋ยและปัจจัยที่ใช้
+          </ReadAloudLabel>
           <TouchableOpacity
             style={[
               styles.bigChip,
@@ -364,13 +565,20 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
 
           {!inputNotDone && (
             <>
-          <Text style={styles.label}>ชนิดที่ใช้:</Text>
+          <ReadAloudLabel
+            text="ชนิดที่ใช้ เลือกปุ๋ยหรือปัจจัยการผลิตที่ใช้ในแปลง"
+            color={themePrimary}
+            textStyle={styles.label}
+            containerStyle={styles.labelRow}
+          >
+            ชนิดที่ใช้:
+          </ReadAloudLabel>
           <View style={styles.chipGroup}>
             {['ปุ๋ยหมัก', 'แหนแดง', 'น้ำหมักชีวภาพ', 'ปุ๋ยคอก', 'เมล็ดพันธุ์'].map((t) => (
               <TouchableOpacity
                 key={t}
                 style={[styles.bigChip, inputType === t && { backgroundColor: themeActiveBg, borderColor: themeActiveBorder }]}
-                onPress={() => setInputType(t)}
+                onPress={() => setInputType((current) => current === t ? '' : t)}
               >
                 <Text style={[styles.bigChipText, inputType === t && { color: themeActiveBorder, fontWeight: 'bold' }]}>
                   {inputType === t ? `✓ ${t}` : t}
@@ -379,13 +587,20 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
             ))}
           </View>
 
-          <Text style={styles.label}>ปริมาณที่ใช้:</Text>
+          <ReadAloudLabel
+            text="ปริมาณที่ใช้ เลือกจำนวนหรือปริมาณปัจจัยการผลิตที่ใช้"
+            color={themePrimary}
+            textStyle={styles.label}
+            containerStyle={styles.labelRow}
+          >
+            ปริมาณที่ใช้:
+          </ReadAloudLabel>
           <View style={styles.chipGroup}>
             {['1 ถุง/กระสอบ', '2-3 กระสอบ', '5 กระสอบขึ้นไป', '10-20 ลิตร'].map((q) => (
               <TouchableOpacity
                 key={q}
                 style={[styles.bigChip, inputQuantity === q && { backgroundColor: themeActiveBg, borderColor: themeActiveBorder }]}
-                onPress={() => setInputQuantity(q)}
+                onPress={() => setInputQuantity((current) => current === q ? '' : q)}
               >
                 <Text style={[styles.bigChipText, inputQuantity === q && { color: themeActiveBorder, fontWeight: 'bold' }]}>
                   {inputQuantity === q ? `✓ ${q}` : q}
@@ -394,7 +609,14 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
             ))}
           </View>
 
-          <Text style={[styles.subLabel, { color: themePrimary }]}>รายละเอียดปุ๋ย/ปัจจัยเพิ่มเติม:</Text>
+          <ReadAloudLabel
+            text="รายละเอียดปุ๋ยหรือปัจจัยเพิ่มเติม ใช้ระบุข้อมูลเพิ่มเติมของสิ่งที่นำมาใช้"
+            color={themePrimary}
+            textStyle={[styles.subLabel, { color: themePrimary }]}
+            containerStyle={styles.labelRow}
+          >
+            รายละเอียดปุ๋ย/ปัจจัยเพิ่มเติม:
+          </ReadAloudLabel>
           <View style={[styles.speechInputContainer, { borderColor: themeBorder }]}>
             <TextInput
               style={styles.speechInput}
@@ -409,11 +631,19 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
           </View>
             </>
           )}
+          {renderPhotoField(inputPhoto, setInputPhoto, 'ปุ๋ยและปัจจัยที่ใช้')}
         </View>
 
         {/* 3. น้ำหมัก/สารทำเอง & สิทธิ์การขออนุญาต */}
         <View style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: themePrimary }]}>🧪 3. น้ำหมัก / สารทำเอง</Text>
+          <ReadAloudLabel
+            text="น้ำหมักหรือสารทำเอง ใช้บันทึกสูตรที่ใช้และรายละเอียดของสารที่ทำขึ้นเอง"
+            color={themePrimary}
+            textStyle={[styles.sectionTitle, { color: themePrimary }]}
+            containerStyle={styles.sectionTitleRow}
+          >
+            🧪 3. น้ำหมัก / สารทำเอง
+          </ReadAloudLabel>
           <TouchableOpacity
             style={[
               styles.bigChip,
@@ -427,13 +657,20 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
           </TouchableOpacity>
           {!selfMadeNotDone && (
             <>
-          <Text style={styles.label}>สูตรน้ำหมักที่ใช้:</Text>
+          <ReadAloudLabel
+            text="สูตรน้ำหมักที่ใช้ เลือกสูตรน้ำหมักหรือสารทำเองที่ใช้ในแปลง"
+            color={themePrimary}
+            textStyle={styles.label}
+            containerStyle={styles.labelRow}
+          >
+            สูตรน้ำหมักที่ใช้:
+          </ReadAloudLabel>
           <View style={styles.chipGroup}>
             {['น้ำหมักชีวภาพ', 'น้ำหมักมูลสุกร', 'น้ำหมักเปลือกสับปะรด', 'ฮอร์โมนไข่'].map((f) => (
               <TouchableOpacity
                 key={f}
                 style={[styles.bigChip, selfMadeFormula === f && { backgroundColor: themeActiveBg, borderColor: themeActiveBorder }]}
-                onPress={() => setSelfMadeFormula(f)}
+                onPress={() => setSelfMadeFormula((current) => current === f ? '' : f)}
               >
                 <Text style={[styles.bigChipText, selfMadeFormula === f && { color: themeActiveBorder, fontWeight: 'bold' }]}>
                   {selfMadeFormula === f ? `✓ ${f}` : f}
@@ -443,7 +680,14 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
           </View>
 
           <View style={styles.switchRow}>
-            <Text style={[styles.switchLabel, { color: themePrimary }]}>แจ้งขออนุญาตระบบ ICS</Text>
+            <ReadAloudLabel
+              text="แจ้งขออนุญาตระบบไอซีเอส เปิดใช้เมื่อต้องการส่งคำขออนุมัติสำหรับสูตรน้ำหมักหรือสารทำเอง"
+              color={themePrimary}
+              textStyle={[styles.switchLabel, { color: themePrimary }]}
+              containerStyle={styles.switchLabelRow}
+            >
+              แจ้งขออนุญาตระบบ ICS
+            </ReadAloudLabel>
             <Switch
               value={requestIcsApproval}
               onValueChange={setRequestIcsApproval}
@@ -451,7 +695,14 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
             />
           </View>
 
-          <Text style={[styles.subLabel, { color: themePrimary }]}>รายละเอียดสูตรน้ำหมักเพิ่มเติม:</Text>
+          <ReadAloudLabel
+            text="รายละเอียดสูตรน้ำหมักเพิ่มเติม ใช้บันทึกส่วนผสมหรือข้อมูลอื่นของสูตร"
+            color={themePrimary}
+            textStyle={[styles.subLabel, { color: themePrimary }]}
+            containerStyle={styles.labelRow}
+          >
+            รายละเอียดสูตรน้ำหมักเพิ่มเติม:
+          </ReadAloudLabel>
           <View style={[styles.speechInputContainer, { borderColor: themeBorder }]}>
             <TextInput
               style={styles.speechInput}
@@ -466,11 +717,19 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
           </View>
             </>
           )}
+          {renderPhotoField(selfMadePhoto, setSelfMadePhoto, 'น้ำหมักหรือสารทำเอง')}
         </View>
 
         {/* 4. แหล่งน้ำ */}
         <View style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: themePrimary }]}>💧 4. การจัดการน้ำ</Text>
+          <ReadAloudLabel
+            text="การจัดการน้ำ ใช้บันทึกแหล่งน้ำ ระดับน้ำ และรายละเอียดการจัดการน้ำในแปลง"
+            color={themePrimary}
+            textStyle={[styles.sectionTitle, { color: themePrimary }]}
+            containerStyle={styles.sectionTitleRow}
+          >
+            💧 4. การจัดการน้ำ
+          </ReadAloudLabel>
           <TouchableOpacity
             style={[
               styles.bigChip,
@@ -485,13 +744,20 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
 
           {!waterNotDone && (
             <>
-          <Text style={styles.label}>แหล่งน้ำที่ใช้:</Text>
+          <ReadAloudLabel
+            text="แหล่งน้ำที่ใช้ เลือกแหล่งน้ำที่นำมาใช้ในแปลง"
+            color={themePrimary}
+            textStyle={styles.label}
+            containerStyle={styles.labelRow}
+          >
+            แหล่งน้ำที่ใช้:
+          </ReadAloudLabel>
           <View style={styles.chipGroup}>
             {['บ่อน้ำประจำแปลง', 'ธนาคารน้ำใต้ดิน', 'ระบบโซลาร์เซลล์', 'น้ำชลประทาน'].map((w) => (
               <TouchableOpacity
                 key={w}
                 style={[styles.bigChip, waterSource === w && { backgroundColor: themeActiveBg, borderColor: themeActiveBorder }]}
-                onPress={() => setWaterSource(w)}
+                onPress={() => setWaterSource((current) => current === w ? '' : w)}
               >
                 <Text style={[styles.bigChipText, waterSource === w && { color: themeActiveBorder, fontWeight: 'bold' }]}>
                   {waterSource === w ? `✓ ${w}` : w}
@@ -500,13 +766,20 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
             ))}
           </View>
 
-          <Text style={styles.label}>ระดับน้ำในบ่อ:</Text>
+          <ReadAloudLabel
+            text="ระดับน้ำในบ่อ เลือกระดับน้ำปัจจุบัน เช่น ปกติ น้ำลดลง หรือแห้งขอด"
+            color={themePrimary}
+            textStyle={styles.label}
+            containerStyle={styles.labelRow}
+          >
+            ระดับน้ำในบ่อ:
+          </ReadAloudLabel>
           <View style={styles.chipGroup}>
             {['ปกติ', 'น้ำลดลง', 'แห้งขอด'].map((l) => (
               <TouchableOpacity
                 key={l}
                 style={[styles.bigChip, waterLevel === l && { backgroundColor: themeActiveBg, borderColor: themeActiveBorder }]}
-                onPress={() => setWaterLevel(l)}
+                onPress={() => setWaterLevel((current) => current === l ? '' : l)}
               >
                 <Text style={[styles.bigChipText, waterLevel === l && { color: themeActiveBorder, fontWeight: 'bold' }]}>
                   {waterLevel === l ? `✓ ${l}` : l}
@@ -515,7 +788,14 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
             ))}
           </View>
 
-          <Text style={[styles.subLabel, { color: themePrimary }]}>รายละเอียดเรื่องน้ำเพิ่มเติม:</Text>
+          <ReadAloudLabel
+            text="รายละเอียดเรื่องน้ำเพิ่มเติม ใช้บันทึกข้อมูลการจัดการน้ำที่ต้องการอธิบายเพิ่ม"
+            color={themePrimary}
+            textStyle={[styles.subLabel, { color: themePrimary }]}
+            containerStyle={styles.labelRow}
+          >
+            รายละเอียดเรื่องน้ำเพิ่มเติม:
+          </ReadAloudLabel>
           <View style={[styles.speechInputContainer, { borderColor: themeBorder }]}>
             <TextInput
               style={styles.speechInput}
@@ -530,11 +810,19 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
           </View>
             </>
           )}
+          {renderPhotoField(waterPhoto, setWaterPhoto, 'การจัดการน้ำ')}
         </View>
 
         {/* 5. แรงงาน */}
         <View style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: themePrimary }]}>👨‍🌾 5. ผู้ปฏิบัติงาน & เครื่องจักร</Text>
+          <ReadAloudLabel
+            text="ผู้ปฏิบัติงานและเครื่องจักร ใช้บันทึกผู้ทำกิจกรรมและรายละเอียดแรงงานหรือเครื่องจักรที่ใช้"
+            color={themePrimary}
+            textStyle={[styles.sectionTitle, { color: themePrimary }]}
+            containerStyle={styles.sectionTitleRow}
+          >
+            👨‍🌾 5. ผู้ปฏิบัติงาน & เครื่องจักร
+          </ReadAloudLabel>
           <TouchableOpacity
             style={[
               styles.bigChip,
@@ -548,12 +836,20 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
           </TouchableOpacity>
           {!workerNotDone && (
             <>
+          <ReadAloudLabel
+            text="ประเภทผู้ปฏิบัติงาน เลือกว่าเป็นแรงงานในครัวเรือน การจ้างแรงงาน หรือกลุ่มวานแรง"
+            color={themePrimary}
+            textStyle={styles.label}
+            containerStyle={styles.labelRow}
+          >
+            ประเภทผู้ปฏิบัติงาน:
+          </ReadAloudLabel>
           <View style={styles.chipGroup}>
             {['ทำเองในครัวเรือน', 'จ้างแรงงาน', 'กลุ่มวานแรง'].map((wrk) => (
               <TouchableOpacity
                 key={wrk}
                 style={[styles.bigChip, workerType === wrk && { backgroundColor: themeActiveBg, borderColor: themeActiveBorder }]}
-                onPress={() => setWorkerType(wrk)}
+                onPress={() => setWorkerType((current) => current === wrk ? '' : wrk)}
               >
                 <Text style={[styles.bigChipText, workerType === wrk && { color: themeActiveBorder, fontWeight: 'bold' }]}>
                   {workerType === wrk ? `✓ ${wrk}` : wrk}
@@ -562,7 +858,14 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
             ))}
           </View>
 
-          <Text style={[styles.subLabel, { color: themePrimary }]}>รายละเอียดผู้ปฏิบัติงานเพิ่มเติม:</Text>
+          <ReadAloudLabel
+            text="รายละเอียดผู้ปฏิบัติงานเพิ่มเติม ใช้ระบุจำนวนแรงงานหรือรายละเอียดอื่นเกี่ยวกับผู้ทำกิจกรรม"
+            color={themePrimary}
+            textStyle={[styles.subLabel, { color: themePrimary }]}
+            containerStyle={styles.labelRow}
+          >
+            รายละเอียดผู้ปฏิบัติงานเพิ่มเติม:
+          </ReadAloudLabel>
           <View style={[styles.speechInputContainer, { borderColor: themeBorder }]}>
             <TextInput
               style={styles.speechInput}
@@ -577,13 +880,19 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
           </View>
             </>
           )}
+          {renderPhotoField(workerPhoto, setWorkerPhoto, 'ผู้ปฏิบัติงานและเครื่องจักร')}
         </View>
 
         {/* 6. กิจกรรมเพิ่มเติม */}
         <View style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: themePrimary }]}>
+          <ReadAloudLabel
+            text="กิจกรรมที่ทำเพิ่มเติม ใช้ระบุกิจกรรมอื่นที่ไม่ได้อยู่ในรายการกิจกรรมข้างต้น"
+            color={themePrimary}
+            textStyle={[styles.sectionTitle, { color: themePrimary }]}
+            containerStyle={styles.sectionTitleRow}
+          >
             🌱 6. กิจกรรมที่ทำเพิ่มเติมนอกเหนือจากกิจกรรมข้างต้น
-          </Text>
+          </ReadAloudLabel>
           <View style={[styles.speechInputContainer, { borderColor: themeBorder }]}>
             <TextInput
               style={styles.speechInput}
@@ -596,12 +905,20 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
               <Text style={styles.micBtnText}>{listeningSection === 'กิจกรรมเพิ่มเติม' ? '🔴 กำลังฟัง... (กดเพื่อหยุด)' : '🎙️ พูดเพื่อพิมพ์'}</Text>
             </TouchableOpacity>
           </View>
+          {renderPhotoField(additionalActivityPhoto, setAdditionalActivityPhoto, 'กิจกรรมเพิ่มเติม')}
         </View>
 
         {/* 7. ความชื้น */}
         {isOfficer && (
           <View style={[styles.card, { borderColor: themeBorder, borderWidth: 2 }]}>
-            <Text style={[styles.sectionTitle, { color: themePrimary }]}>💧 7. ระบุค่าความชื้น (Option)</Text>
+            <ReadAloudLabel
+              text="ค่าความชื้น กรอกเปอร์เซ็นต์ความชื้นของข้าวเปลือกเพื่อบันทึกค่าที่วัดได้"
+              color={themePrimary}
+              textStyle={[styles.sectionTitle, { color: themePrimary }]}
+              containerStyle={styles.sectionTitleRow}
+            >
+              💧 7. ระบุค่าความชื้น
+            </ReadAloudLabel>
             <Text style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>
               หากกรอกความชื้นด้วย ระบบจะปลดล็อกสถานะ "วัดความชื้น" ให้เกษตรกรทันที
             </Text>
@@ -612,6 +929,7 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
               value={moistureValue}
               onChangeText={setMoistureValue}
             />
+            {renderPhotoField(moisturePhoto, setMoisturePhoto, 'ค่าความชื้น')}
           </View>
         )}
 
@@ -707,9 +1025,11 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1b5e20' },
 
   card: { backgroundColor: '#ffffff', borderRadius: 16, padding: 16, elevation: 2 },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#1b5e20', marginBottom: 10 },
-  label: { fontSize: 14, fontWeight: 'bold', color: '#374151', marginTop: 10, marginBottom: 6 },
-  subLabel: { fontSize: 12, fontWeight: 'bold', color: '#1b5e20', marginTop: 12, marginBottom: 4 },
+  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#1b5e20' },
+  sectionTitleRow: { marginBottom: 10 },
+  label: { fontSize: 14, fontWeight: 'bold', color: '#374151' },
+  labelRow: { marginTop: 10, marginBottom: 6 },
+  subLabel: { fontSize: 12, fontWeight: 'bold', color: '#1b5e20' },
 
   dateSelectorRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   selectBoxContainer: { flex: 1 },
@@ -747,7 +1067,21 @@ const styles = StyleSheet.create({
     borderTopColor: '#f3f4f6',
   },
   switchLabel: { fontSize: 14, fontWeight: 'bold', color: '#1b5e20' },
+  switchLabelRow: { flex: 1 },
 
+  plotVoiceContainer: {
+    marginTop: 8,
+    gap: 6,
+    backgroundColor: '#fafafa',
+    padding: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  plotVoiceInput: {
+    minHeight: 40,
+    fontSize: 14,
+    color: '#1f2937',
+  },
   speechInputContainer: {
     gap: 6,
     backgroundColor: '#fafafa',
@@ -761,6 +1095,45 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     minHeight: 40,
     textAlignVertical: 'top',
+  },
+  photoField: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    gap: 8,
+  },
+  photoFieldLabel: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#475569',
+  },
+  photoButton: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  photoButtonText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  photoPreviewContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  photoPreview: {
+    width: 140,
+    height: 105,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+  },
+  removePhotoText: {
+    color: '#dc2626',
+    fontSize: 13,
+    fontWeight: 'bold',
   },
   micBtn: {
     backgroundColor: '#15803d',
