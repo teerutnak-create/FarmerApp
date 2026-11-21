@@ -12,6 +12,7 @@ import {
 import VoiceTextInput from './VoiceTextInput';
 import ReadAloudLabel from '../components/ReadAloudLabel';
 import { notify } from '../utils/notify';
+import { hasSelectionOrVoice } from '../utils/hasSelectionOrVoice';
 import { PLOTS } from '../data/options';
 import { CROPS, SEED_SOURCES, RICE_TARGET } from '../data/profile';
 
@@ -42,26 +43,42 @@ export default function YieldScreen({ user, onSave, onClose }) {
   );
 
   const save = () => {
-    if (!plot) return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกแปลงนาก่อนบันทึก');
-    if (!crop) return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกชนิดพืชที่ปลูก');
-    if (!seed) return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกแหล่งเมล็ดพันธุ์');
+    if (!hasSelectionOrVoice(plot, voiceNotes.plot)) {
+      return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกแปลงนาหรือบันทึกข้อความเสียง');
+    }
+    if (!hasSelectionOrVoice(crop, voiceNotes.crop)) {
+      return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกชนิดพืชหรือบันทึกข้อความเสียง');
+    }
+    if (!hasSelectionOrVoice(seed, voiceNotes.seed)) {
+      return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกแหล่งเมล็ดพันธุ์หรือบันทึกข้อความเสียง');
+    }
 
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const userId = user?.id ? user.id.toUpperCase() : 'USER';
-    const lot = 'LOT-' + userId + '-' + date + '-' + (PLOTS.indexOf(plot) + 1);
+    const savedPlot = plot || voiceNotes.plot.trim();
+    const savedCrop = crop || voiceNotes.crop.trim();
+    const savedSeed = seed || voiceNotes.seed.trim();
+    const plotIndex = PLOTS.indexOf(savedPlot);
+    const plotCode = plotIndex >= 0 ? plotIndex + 1 : 'VOICE';
+    const lot = 'LOT-' + userId + '-' + date + '-' + plotCode;
 
     onSave('ผลผลิต', {
-      plot,
-      crop,
-      seedSource: seed,
+      plot: savedPlot,
+      crop: savedCrop,
+      seedSource: savedSeed,
       kgPerRai: kg,
       voiceNotes,
       lot,
-      summary: `ผลผลิต ${crop} · ${plot} · ${kg} กก./ไร่ · ${lot}`,
+      summary: `ผลผลิต ${savedCrop} · ${savedPlot} · ${kg} กก./ไร่ · ${lot}`,
     });
 
     notify('บันทึกสำเร็จ! ✅', `เลขล็อตสินค้าของท่านคือ:\n${lot}`, onClose);
   };
+
+  const isFormComplete =
+    hasSelectionOrVoice(plot, voiceNotes.plot) &&
+    hasSelectionOrVoice(crop, voiceNotes.crop) &&
+    hasSelectionOrVoice(seed, voiceNotes.seed);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -209,9 +226,9 @@ export default function YieldScreen({ user, onSave, onClose }) {
 
         {/* ปุ่มบันทึกใหญ่พิเศษ */}
         <TouchableOpacity 
-          style={[styles.saveBigBtn, (!plot || !crop || !seed) && styles.saveBigBtnDisabled]} 
+          style={[styles.saveBigBtn, !isFormComplete && styles.saveBigBtnDisabled]}
           onPress={save}
-          disabled={!plot || !crop || !seed}
+          disabled={!isFormComplete}
           activeOpacity={0.8}
         >
           <Text style={styles.saveBigBtnText}>💾 บันทึกผลผลิตประจำวัน</Text>

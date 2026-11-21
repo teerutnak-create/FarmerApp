@@ -12,6 +12,7 @@ import {
 import VoiceTextInput from './VoiceTextInput';
 import ReadAloudLabel from '../components/ReadAloudLabel';
 import { notify } from '../utils/notify';
+import { hasSelectionOrVoice } from '../utils/hasSelectionOrVoice';
 import { PLOTS } from '../data/options';
 import {
   SOILS,
@@ -58,22 +59,50 @@ export default function PlotInfoScreen({ onSave, onClose }) {
   const hasCert = standards.some((x) => CERT_STANDARDS.includes(x));
 
   const save = () => {
-    if (!plot) return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกแปลงนาของท่าน');
-    if (!soil) return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกชนิดดิน');
-    if (!chem) return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกประวัติการใช้สารเคมี');
+    if (!hasSelectionOrVoice(plot, voiceNotes.plot)) {
+      return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกแปลงนาหรือบันทึกข้อความเสียง');
+    }
+    if (!hasSelectionOrVoice(soil, voiceNotes.soil)) {
+      return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกชนิดดินหรือบันทึกข้อความเสียง');
+    }
+    if (!hasSelectionOrVoice(chem, voiceNotes.chemical)) {
+      return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกประวัติการใช้สารเคมีหรือบันทึกข้อความเสียง');
+    }
+    if (!hasSelectionOrVoice(facilities, voiceNotes.facilities)) {
+      return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกสิ่งที่มีในแปลงหรือบันทึกข้อความเสียง');
+    }
+    if (!hasSelectionOrVoice(standards, voiceNotes.standards)) {
+      return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกมาตรฐานรับรองหรือบันทึกข้อความเสียง');
+    }
 
-    const extra = { plot, rai, soil, chem, facilities, standards, voiceNotes };
+    const savedPlot = plot || voiceNotes.plot.trim();
+    const extra = {
+      plot: savedPlot,
+      rai,
+      soil: soil || voiceNotes.soil.trim(),
+      chem: chem || voiceNotes.chemical.trim(),
+      facilities,
+      standards,
+      voiceNotes,
+    };
     if (hasCert) {
       extra.certExpiry = new Date(Date.now() + months * 30 * DAY).toISOString();
     }
     extra.summary =
-      'ข้อมูลแปลง · ' + plot + ' · ' + rai + ' ไร่' +
+      'ข้อมูลแปลง · ' + savedPlot + ' · ' + rai + ' ไร่' +
       (standards.length > 0 ? ' · ' + standards.join(', ') : '');
 
     onSave('ข้อมูลแปลง', extra);
 
     notify('บันทึกสำเร็จ! ✅', extra.summary, onClose);
   };
+
+  const isFormComplete =
+    hasSelectionOrVoice(plot, voiceNotes.plot) &&
+    hasSelectionOrVoice(soil, voiceNotes.soil) &&
+    hasSelectionOrVoice(chem, voiceNotes.chemical) &&
+    hasSelectionOrVoice(facilities, voiceNotes.facilities) &&
+    hasSelectionOrVoice(standards, voiceNotes.standards);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -305,9 +334,9 @@ export default function PlotInfoScreen({ onSave, onClose }) {
 
         {/* ปุ่มบันทึกข้อมูล */}
         <TouchableOpacity
-          style={[styles.saveBigBtn, (!plot || !soil || !chem) && styles.saveBigBtnDisabled]}
+          style={[styles.saveBigBtn, !isFormComplete && styles.saveBigBtnDisabled]}
           onPress={save}
-          disabled={!plot || !soil || !chem}
+          disabled={!isFormComplete}
           activeOpacity={0.8}
         >
           <Text style={styles.saveBigBtnText}>💾 บันทึกข้อมูลแปลงนา</Text>

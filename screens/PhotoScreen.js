@@ -17,7 +17,6 @@ import * as Location from 'expo-location';
 import ReadAloudLabel from '../components/ReadAloudLabel';
 import { PLOTS } from '../data/options';
 import { notify } from '../utils/notify';
-import ReadAloudLabel from '../components/ReadAloudLabel';
 
 export default function PhotoScreen({ onSave, onClose }) {
   const [plot, setPlot] = useState(null);
@@ -191,7 +190,9 @@ export default function PhotoScreen({ onSave, onClose }) {
   };
 
   const save = () => {
-    if (!plot) return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกแปลงนาก่อนบันทึก');
+    if (!plot && !voiceText.trim()) {
+      return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกแปลงนาหรือบันทึกข้อความเสียง');
+    }
     if (!photo) return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาถ่ายรูปแปลงนาก่อนบันทึก');
 
     const hasGps = photo.lat !== null;
@@ -204,7 +205,7 @@ export default function PhotoScreen({ onSave, onClose }) {
       lat: photo.lat,
       lng: photo.lng,
       accuracy: photo.accuracy,
-      summary: `ถ่ายรูป ${plot}${hasGps ? ' · มีพิกัด GPS' : ' · ไม่มีพิกัด GPS'}`,
+      summary: `ถ่ายรูป ${plot || 'พร้อมข้อความเสียงเพิ่มเติม'}${hasGps ? ' · มีพิกัด GPS' : ' · ไม่มีพิกัด GPS'}`,
     });
 
     notify(
@@ -332,10 +333,10 @@ export default function PhotoScreen({ onSave, onClose }) {
         <TouchableOpacity
           style={[
             styles.saveBtn,
-            (!plot || !photo) && styles.saveBtnDisabled,
+            ((!plot && !voiceText.trim()) || !photo) && styles.saveBtnDisabled,
           ]}
           onPress={save}
-          disabled={!plot || !photo}
+          disabled={(!plot && !voiceText.trim()) || !photo}
           activeOpacity={0.8}
         >
           <Text style={styles.saveBtnText}>💾 บันทึกข้อมูลประจำวัน</Text>
