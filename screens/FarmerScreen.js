@@ -22,6 +22,7 @@ import YieldScreen from './YieldScreen';
 import AssistantScreen from './AssistantScreen';
 import { SharedBottomNav, SharedTabContent } from './SharedBottomTabs';
 import { USERS as DEFAULT_USERS } from '../data/users';
+import ReadAloudLabel from '../components/ReadAloudLabel';
 
 const HARVEST = 'เกี่ยวข้าวเสร็จแล้ว';
 const DRY_HOURS = 24;
@@ -465,7 +466,13 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
               {/* การ์ดวัดความชื้น Real-time */}
               <View style={f.card}>
                 <View style={f.cardHeaderRow}>
-                  <Text style={f.cardTitle}>💧 วัดและบันทึกความชื้นข้าวเปลือก</Text>
+                  <ReadAloudLabel
+                    text="วัดและบันทึกความชื้นข้าวเปลือก ใช้กรอกค่าความชื้นที่อ่านได้จากเซนเซอร์หรือวัดด้วยตนเอง แล้วกดบันทึก"
+                    textStyle={[f.cardTitle, { marginBottom: 0 }]}
+                    containerStyle={{ flex: 1, marginBottom: 8 }}
+                  >
+                    💧 วัดและบันทึกความชื้นข้าวเปลือก
+                  </ReadAloudLabel>
                   <TouchableOpacity
                     style={f.liveBadge}
                     onPress={() => setIsLiveMoisture(!isLiveMoisture)}
@@ -475,7 +482,13 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
                   </TouchableOpacity>
                 </View>
 
-                <Text style={f.inputCaption}>ค่าความชื้นจากเซนเซอร์ปัจจุบัน (%)</Text>
+                <ReadAloudLabel
+                  text="ค่าความชื้นจากเซนเซอร์ปัจจุบัน กรอกหรืออ่านค่าเป็นเปอร์เซ็นต์"
+                  textStyle={[f.inputCaption, { marginBottom: 0 }]}
+                  containerStyle={{ marginBottom: 6 }}
+                >
+                  ค่าความชื้นจากเซนเซอร์ปัจจุบัน (%)
+                </ReadAloudLabel>
                 <View style={f.moistureRow}>
                   <TextInput
                     style={[f.customInput, { flex: 1, fontWeight: 'bold', color: '#1b5e20', fontSize: 16 }]}
@@ -548,8 +561,20 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
           {recordMode === 'annual' && (
             <>
               <View style={f.card}>
-                <Text style={f.cardTitle}>🌱 วางแผนการปลูกพืชประจำปี (รองรับเสียง)</Text>
-                <Text style={f.inputCaption}>1. เลือกเดือนที่จะปลูก</Text>
+                <ReadAloudLabel
+                  text="วางแผนการปลูกพืชประจำปี ใช้เลือกเดือนและระบุชื่อพืชเพื่อเพิ่มแผนลงปฏิทิน"
+                  textStyle={[f.cardTitle, { marginBottom: 0 }]}
+                  containerStyle={{ marginBottom: 8 }}
+                >
+                  🌱 วางแผนการปลูกพืชประจำปี
+                </ReadAloudLabel>
+                <ReadAloudLabel
+                  text="เลือกเดือนที่จะปลูก เพื่อกำหนดช่วงเวลาของแผนการปลูก"
+                  textStyle={[f.inputCaption, { marginBottom: 0 }]}
+                  containerStyle={{ marginBottom: 6 }}
+                >
+                  1. เลือกเดือนที่จะปลูก
+                </ReadAloudLabel>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
                   <View style={{ flexDirection: 'row', gap: 6 }}>
                     {monthsList.map((m) => (
@@ -564,7 +589,13 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
                   </View>
                 </ScrollView>
 
-                <Text style={f.inputCaption}>2. ระบุชื่อพืชที่จะปลูก</Text>
+                <ReadAloudLabel
+                  text="ระบุชื่อพืชที่จะปลูก พิมพ์ชื่อหรือกดปุ่มพูดเพื่อป้อนชื่อพืช"
+                  textStyle={[f.inputCaption, { marginBottom: 0 }]}
+                  containerStyle={{ marginBottom: 6 }}
+                >
+                  2. ระบุชื่อพืชที่จะปลูก
+                </ReadAloudLabel>
                 <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                   <TextInput
                     style={[f.customInput, { flex: 1 }]}
