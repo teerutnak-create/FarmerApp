@@ -27,6 +27,7 @@ export default function AssistantScreen(props) {
   const [loading, setLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const scrollViewRef = useRef(null);
+  const assistantRequestRef = useRef(null);
   const speechRecognitionRef = useRef(null);
   const nativeVoiceRef = useRef(null);
   const voiceBasePromptRef = useRef('');
@@ -46,6 +47,9 @@ export default function AssistantScreen(props) {
 
   useEffect(() => {
     return () => {
+      assistantRequestRef.current?.abort();
+      assistantRequestRef.current = null;
+
       if (speechRecognitionRef.current) {
         const recognition = speechRecognitionRef.current;
         recognition.onresult = null;
@@ -203,6 +207,8 @@ export default function AssistantScreen(props) {
     setMessages(updatedMessages);
     setPrompt('');
     setLoading(true);
+    const controller = new AbortController();
+    assistantRequestRef.current = controller;
 
     try {
       // ส่งประวัติการคุย (ตัดข้อความต้อนรับเริ่มต้นออก) เพื่อให้ AI จำบริบทต่อเนื่องได้
@@ -210,7 +216,7 @@ export default function AssistantScreen(props) {
         .filter((m) => m.id !== 'welcome')
         .map(({ role, content }) => ({ role, content }));
 
-      const text = await requestAssistant(historyForApi, props.context || '');
+      const text = await requestAssistant(historyForApi, props.context || '', controller.signal);
 
       const aiMsg = {
         id: (Date.now() + 1).toString(),
@@ -219,6 +225,7 @@ export default function AssistantScreen(props) {
       };
       setMessages((prev) => [...prev, aiMsg]);
     } catch (err) {
+      if (controller.signal.aborted) return;
       const errMsg = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -227,8 +234,19 @@ export default function AssistantScreen(props) {
       };
       setMessages((prev) => [...prev, errMsg]);
     } finally {
-      setLoading(false);
+      if (assistantRequestRef.current === controller) {
+        assistantRequestRef.current = null;
+        setLoading(false);
+      }
     }
+  };
+
+  const stopAI = () => {
+    const controller = assistantRequestRef.current;
+    if (!controller) return;
+    assistantRequestRef.current = null;
+    controller.abort();
+    setLoading(false);
   };
 
   const handleKeyPress = (e) => {
@@ -335,17 +353,26 @@ export default function AssistantScreen(props) {
           >
             <Text style={styles.micButtonText}>{isListening ? '⏹️' : '🎙️'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              (!prompt.trim() || loading) && styles.sendButtonDisabled,
-            ]}
-            onPress={askAI}
-            disabled={!prompt.trim() || loading}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.sendButtonText}>ส่ง</Text>
-          </TouchableOpacity>
+          {loading ? (
+            <TouchableOpacity
+              style={[styles.sendButton, styles.stopButton]}
+              onPress={stopAI}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="หยุดการคิดคำตอบ"
+            >
+              <View style={styles.stopIcon} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.sendButton, !prompt.trim() && styles.sendButtonDisabled]}
+              onPress={askAI}
+              disabled={!prompt.trim()}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.sendButtonText}>ส่ง</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -520,6 +547,17 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     backgroundColor: '#a5d6a7',
+  },
+  stopButton: {
+    width: 44,
+    paddingHorizontal: 0,
+    backgroundColor: '#1f2937',
+  },
+  stopIcon: {
+    width: 12,
+    height: 12,
+    borderRadius: 2,
+    backgroundColor: '#ffffff',
   },
   sendButtonText: {
     color: '#ffffff',

@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Network from 'expo-network';
 import LoginScreen from './screens/LoginScreen';
 import FarmerScreen from './screens/FarmerScreen';
+import { initLargeTextMode } from './utils/largeTextMode';
 import OfficerScreen from './screens/OfficerScreen';
 import { FARMER_LOCATIONS_KEY, hasValidGpsCoordinates } from './utils/farmerMapData';
 import { listGroupFarmers } from './services/authService';
@@ -47,6 +48,10 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [syncStatus, setSyncStatus] = useState('synced');
   const isDemoUser = currentUser?.isDemo === true;
+
+  useEffect(() => {
+    initLargeTextMode();
+  }, []);
 
   // Restore the locally stored session before deciding which role-specific screen to render.
   useEffect(() => {

@@ -134,7 +134,13 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
     };
   }, []);
 
-  const back = () => setPage('home');
+  // 🟢 ฟังก์ชันย้อนกลับไปหน้าหลัก (บริการประจำวัน) สำหรับทุกปุ่ม
+  const goHomeDaily = () => {
+    setPage('home');
+    setRecordMode('daily');
+    setBottomTab('home');
+    setShowProfileModal(false);
+  };
 
   const handleLogout = async () => {
     try {
@@ -148,17 +154,53 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
     if (onLogout) onLogout();
   };
 
-  if (page === 'form') return (
-    <DailyLogScreen
-      onSave={(type, data) => { if (onLog) onLog(type, data); }}
-      onClose={back}
-    />
+  // 🟢 แถบปุ่มย้อนกลับด้านบนสำหรับ 5 หน้าย่อย (บันทึกวันนี้, ถ่ายรูป GPS, ผู้ช่วย AI, ข้อมูลแปลง, สรุปผลผลิต)
+  const renderSubPageWithBack = (title, content) => (
+    <SafeAreaView style={f.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor="#2e7d32" />
+      <View style={f.subPageBackBar}>
+        <TouchableOpacity style={f.subPageBackBtn} onPress={goHomeDaily}>
+          <Text style={f.subPageBackBtnText}>❮ ย้อนกลับหน้าหลัก</Text>
+        </TouchableOpacity>
+        <Text style={f.subPageBackTitle} numberOfLines={1}>{title}</Text>
+      </View>
+      <View style={{ flex: 1 }}>{content}</View>
+    </SafeAreaView>
   );
-  if (page === 'photo') return <PhotoScreen onSave={onLog} onClose={back} />;
-  if (page === 'plot') return <PlotInfoScreen onSave={onLog} onClose={back} />;
-  if (page === 'yield') return <YieldScreen user={user} onSave={onLog} onClose={back} />;
-  if (page === 'assistant')
-    return <AssistantScreen user={user} logs={logs} moisture={moisture} onClose={back} />;
+
+  if (page === 'form') {
+    return renderSubPageWithBack(
+      '📝 บันทึกกิจกรรมวันนี้',
+      <DailyLogScreen
+        onSave={(type, data) => { if (onLog) onLog(type, data); }}
+        onClose={goHomeDaily}
+      />
+    );
+  }
+  if (page === 'photo') {
+    return renderSubPageWithBack(
+      '📷 ถ่ายรูปแปลง + GPS',
+      <PhotoScreen onSave={onLog} onClose={goHomeDaily} />
+    );
+  }
+  if (page === 'plot') {
+    return renderSubPageWithBack(
+      '🗺️ ข้อมูลแปลง',
+      <PlotInfoScreen onSave={onLog} onClose={goHomeDaily} />
+    );
+  }
+  if (page === 'yield') {
+    return renderSubPageWithBack(
+      '📦 สรุปผลผลิต',
+      <YieldScreen user={user} onSave={onLog} onClose={goHomeDaily} />
+    );
+  }
+  if (page === 'assistant') {
+    return renderSubPageWithBack(
+      '🤖 ผู้ช่วยเกษตร AI',
+      <AssistantScreen user={user} logs={logs} moisture={moisture} onClose={goHomeDaily} />
+    );
+  }
 
   const handleSelectVideo = (video) => {
     setActiveVideo(video);
@@ -280,7 +322,7 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
       v.desc.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // เมนูไอคอน 4 คอลัมน์ (สไตล์รูปที่ 4)
+  // เมนูไอคอน 4 คอลัมน์ (8 ปุ่ม)
   const quickMenuItems = [
     { key: 'form', icon: '📝', label: 'บันทึกวันนี้', bg: '#e8f5e9', onPress: () => setPage('form') },
     { key: 'photo', icon: '📷', label: 'ถ่ายรูป GPS', bg: '#e0f2f1', onPress: () => setPage('photo') },
@@ -288,7 +330,7 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
     { key: 'plot', icon: '🗺️', label: 'ข้อมูลแปลง', bg: '#e8f5e9', onPress: () => setPage('plot') },
     { key: 'yield', icon: '📦', label: 'สรุปผลผลิต', bg: '#fffde7', onPress: () => setPage('yield') },
     { key: 'annual', icon: '🗓️', label: 'แผนรายปี', bg: '#e8f5e9', onPress: () => setRecordMode('annual') },
-    { key: 'community', icon: '👥', label: 'กลุ่มแปลงใหญ่', bg: '#e0f2f1', onPress: () => setRecordMode('community') },
+    { key: 'community', icon: '📊', label: 'แดชบอร์ดรวมของกลุ่ม', bg: '#e0f2f1', onPress: () => setRecordMode('community') },
     { key: 'profile', icon: '👤', label: 'โปรไฟล์ฉัน', bg: '#f1f8e9', onPress: () => setShowProfileModal(true) },
   ];
 
@@ -296,11 +338,11 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
     <SafeAreaView style={f.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#2e7d32" />
 
-      {/* 🟢 Top Header Bar (สไตล์รูปที่ 4: โลโก้ + ช่องค้นหา + ปุ่มโปรไฟล์/ออก) */}
+      {/* 🟢 Top Header Bar */}
       <View style={f.topHeader}>
-        <View style={f.logoBadge}>
+        <TouchableOpacity style={f.logoBadge} onPress={goHomeDaily}>
           <Text style={f.logoEmoji}>🌾</Text>
-        </View>
+        </TouchableOpacity>
         <View style={f.searchPill}>
           <Text style={f.searchIcon}>🔍</Text>
           <TextInput
@@ -318,361 +360,396 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
 
       {/* เนื้อหาหลัก */}
       {bottomTab !== 'home' ? (
-   <SharedTabContent
-     activeTab={bottomTab}
-     user={user}
-     role="farmer"
-     logs={logs}
-     onLogout={handleLogout}
-     onOpenProfile={() => setShowProfileModal(true)}
-   />
- ) : (
-  <ScrollView contentContainerStyle={f.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* 🟢 Hero Banner Card (สไตล์แบนเนอร์ด้านบนของรูปที่ 4 ในธีมสีเขียว) */}
-        <View style={f.heroBanner}>
-          <View style={f.heroTopRow}>
-            <View style={f.heroTag}>
-              <Text style={f.heroTagText}>PlangJai เกษตรกร</Text>
+        <SharedTabContent
+          activeTab={bottomTab}
+          user={user}
+          role="farmer"
+          logs={logs}
+          onLogout={handleLogout}
+          onOpenProfile={() => setShowProfileModal(true)}
+        />
+      ) : (
+        <ScrollView contentContainerStyle={f.scrollContent} showsVerticalScrollIndicator={false}>
+          {/* 🟢 Hero Banner Card */}
+          <View style={f.heroBanner}>
+            <View style={f.heroTopRow}>
+              <View style={f.heroTag}>
+                <Text style={f.heroTagText}>PlangJai เกษตรกร</Text>
+              </View>
+              <View style={f.heroTagRight}>
+                <Text style={f.heroTagText}>GAP ผ่านรับรอง ✓</Text>
+              </View>
             </View>
-            <View style={f.heroTagRight}>
-              <Text style={f.heroTagText}>GAP ผ่านรับรอง ✓</Text>
-            </View>
-          </View>
 
-          <View style={f.heroBody}>
-            <View style={{ flex: 1 }}>
-              <Text style={f.heroGreeting}>สวัสดี, คุณ{user?.name || 'เกษตรกร'}</Text>
-              <Text style={f.heroSub}>📍 กลุ่มวิสาหกิจชุมชน ต.ผักไหม • ID: {user?.id}</Text>
-            </View>
-            <TouchableOpacity style={f.heroAvatar} onPress={() => setShowProfileModal(true)}>
-              <Text style={f.heroAvatarText}>{user?.name ? user.name.charAt(0) : 'ก'}</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={f.heroStatsRow}>
-            <View style={f.heroStatPill}>
-              <Text style={f.heroStatLabel}>จำนวนแปลง</Text>
-              <Text style={f.heroStatVal}>2 แปลง (5 ไร่)</Text>
-            </View>
-            <View style={f.heroStatPill}>
-              <Text style={f.heroStatLabel}>ความชื้นสด</Text>
-              <Text style={f.heroStatVal}>{moisture ? `${moisture}%` : '-- %'}</Text>
-            </View>
-            <View style={f.heroStatPill}>
-              <Text style={f.heroStatLabel}>บันทึกแล้ว</Text>
-              <Text style={f.heroStatVal}>{logs?.length || 0} รายการ</Text>
-            </View>
-          </View>
-        </View>
-
-        {timerBox}
-
-        {/* 🟢 4-Column Icon Grid Menu (สไตล์เมนู 8 ไอคอนในรูปที่ 4) */}
-        <View style={f.gridCard}>
-          <View style={f.iconGrid}>
-            {quickMenuItems.map((item) => (
-              <TouchableOpacity key={item.key} style={f.iconGridItem} onPress={item.onPress}>
-                <View style={[f.iconCircle, { backgroundColor: item.bg }]}>
-                  <Text style={f.iconEmoji}>{item.icon}</Text>
-                </View>
-                <Text style={f.iconLabel} numberOfLines={2}>{item.label}</Text>
+            <View style={f.heroBody}>
+              <View style={{ flex: 1 }}>
+                <Text style={f.heroGreeting}>สวัสดี, คุณ{user?.name || 'เกษตรกร'}</Text>
+                <Text style={f.heroSub}>📍 กลุ่มวิสาหกิจชุมชน ต.ผักไหม • ID: {user?.id}</Text>
+              </View>
+              <TouchableOpacity style={f.heroAvatar} onPress={() => setShowProfileModal(true)}>
+                <Text style={f.heroAvatarText}>{user?.name ? user.name.charAt(0) : 'ก'}</Text>
               </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* 🟢 เส้นคั่นหัวข้อกลาง (สไตล์ "— สินค้าแนะนำ —" ในรูปที่ 4) */}
-        <View style={f.sectionDividerRow}>
-          <View style={f.dividerLine} />
-          <Text style={f.sectionDividerText}>
-            {recordMode === 'daily'
-              ? 'บริการประจำวัน'
-              : recordMode === 'annual'
-                ? 'แผนการปลูกและรายปี'
-                : 'ภาพรวมกลุ่มแปลงใหญ่'}
-          </Text>
-          <View style={f.dividerLine} />
-        </View>
-
-        {/* เนื้อหาตามแท็บที่เลือก */}
-        {recordMode === 'daily' && (
-          <>
-            {/* การ์ดวัดความชื้น Real-time */}
-            <View style={f.card}>
-              <View style={f.cardHeaderRow}>
-                <Text style={f.cardTitle}>💧 วัดและบันทึกความชื้นข้าวเปลือก</Text>
-                <TouchableOpacity
-                  style={f.liveBadge}
-                  onPress={() => setIsLiveMoisture(!isLiveMoisture)}
-                >
-                  <View style={[f.liveDot, { backgroundColor: isLiveMoisture ? '#22c55e' : '#ef4444' }]} />
-                  <Text style={f.liveBadgeText}>{isLiveMoisture ? 'เรียลไทม์' : 'พิมพ์เอง'}</Text>
-                </TouchableOpacity>
-              </View>
-
-              <Text style={f.inputCaption}>ค่าความชื้นจากเซนเซอร์ปัจจุบัน (%)</Text>
-              <View style={f.moistureRow}>
-                <TextInput
-                  style={[f.customInput, { flex: 1, fontWeight: 'bold', color: '#1b5e20', fontSize: 16 }]}
-                  value={moisture}
-                  onChangeText={(val) => {
-                    setMoisture(val);
-                    setIsLiveMoisture(false);
-                  }}
-                  keyboardType="numeric"
-                  placeholder="กำลังดึงข้อมูล..."
-                  placeholderTextColor="#9ca3af"
-                />
-                <TouchableOpacity style={f.saveMoistureBtn} onPress={saveMoisture}>
-                  <Text style={f.saveMoistureText}>💾 บันทึก</Text>
-                </TouchableOpacity>
-              </View>
             </View>
 
-            {/* วิดีโอคู่มือการใช้งาน */}
-            <View style={f.card}>
-              <Text style={f.cardTitle}>🎥 การสอนบันทึกกิจกรรมประจำวัน</Text>
+            <View style={f.heroStatsRow}>
+              <View style={f.heroStatPill}>
+                <Text style={f.heroStatLabel}>จำนวนแปลง</Text>
+                <Text style={f.heroStatVal}>2 แปลง (5 ไร่)</Text>
+              </View>
+              <View style={f.heroStatPill}>
+                <Text style={f.heroStatLabel}>ความชื้นสด</Text>
+                <Text style={f.heroStatVal}>{moisture ? `${moisture}%` : '-- %'}</Text>
+              </View>
+              <View style={f.heroStatPill}>
+                <Text style={f.heroStatLabel}>บันทึกแล้ว</Text>
+                <Text style={f.heroStatVal}>{logs?.length || 0} รายการ</Text>
+              </View>
+            </View>
+          </View>
 
-              <View style={f.videoPlayerBox}>
-                <Text style={{ fontSize: 32 }}>🎬</Text>
-                <Text style={f.videoPlayingTitle}>{activeVideo.title}</Text>
-                <Text style={f.videoPlayingSub}>⏱️ {activeVideo.duration} • {activeVideo.desc}</Text>
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-                  <TouchableOpacity style={f.playBtn} onPress={() => setIsPlaying(!isPlaying)}>
-                    <Text style={f.playBtnText}>{isPlaying ? '⏸️ หยุดเล่น' : '▶️ เล่นวิดีโอ'}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={f.playBtn}
-                    onPress={() => setShowDailyTutorials((visible) => !visible)}
-                  >
-                    <Text style={f.playBtnText}>
-                      {showDailyTutorials ? '▲ ซ่อนบทเรียนย่อย' : '▼ ดู 4 บทเรียนย่อย'}
+          {timerBox}
+
+          {/* 🟢 4-Column Icon Grid Menu (8 ปุ่ม) */}
+          <View style={f.gridCard}>
+            <View style={f.iconGrid}>
+              {quickMenuItems.map((item) => {
+                const isActiveMode =
+                  (item.key === 'annual' && recordMode === 'annual') ||
+                  (item.key === 'community' && recordMode === 'community');
+                return (
+                  <TouchableOpacity key={item.key} style={f.iconGridItem} onPress={item.onPress}>
+                    <View
+                      style={[
+                        f.iconCircle,
+                        { backgroundColor: item.bg },
+                        isActiveMode && f.iconCircleActive,
+                      ]}
+                    >
+                      <Text style={f.iconEmoji}>{item.icon}</Text>
+                    </View>
+                    <Text
+                      style={[f.iconLabel, isActiveMode && { color: '#1b5e20', fontWeight: 'bold' }]}
+                      numberOfLines={2}
+                    >
+                      {item.label}
                     </Text>
                   </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* 🟢 เส้นคั่นหัวข้อกลาง */}
+          <View style={f.sectionDividerRow}>
+            <View style={f.dividerLine} />
+            <Text style={f.sectionDividerText}>
+              {recordMode === 'daily'
+                ? 'บริการประจำวัน'
+                : recordMode === 'annual'
+                  ? 'แผนการปลูกและรายปี'
+                  : 'แดชบอร์ดรวมของกลุ่ม'}
+            </Text>
+            <View style={f.dividerLine} />
+          </View>
+
+          {/* 🟢 ปุ่มย้อนกลับไปหน้าหลัก (บริการประจำวัน) เมื่ออยู่ในโหมดแผนรายปี หรือ แดชบอร์ดรวมของกลุ่ม */}
+          {recordMode !== 'daily' && (
+            <TouchableOpacity style={f.inlineBackBtn} onPress={goHomeDaily}>
+              <Text style={f.inlineBackBtnText}>❮ ย้อนกลับหน้าหลัก (บริการประจำวัน)</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* เนื้อหาตามแท็บที่เลือก */}
+          {recordMode === 'daily' && (
+            <>
+              {/* การ์ดวัดความชื้น Real-time */}
+              <View style={f.card}>
+                <View style={f.cardHeaderRow}>
+                  <Text style={f.cardTitle}>💧 วัดและบันทึกความชื้นข้าวเปลือก</Text>
+                  <TouchableOpacity
+                    style={f.liveBadge}
+                    onPress={() => setIsLiveMoisture(!isLiveMoisture)}
+                  >
+                    <View style={[f.liveDot, { backgroundColor: isLiveMoisture ? '#22c55e' : '#ef4444' }]} />
+                    <Text style={f.liveBadgeText}>{isLiveMoisture ? 'เรียลไทม์' : 'พิมพ์เอง'}</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={f.inputCaption}>ค่าความชื้นจากเซนเซอร์ปัจจุบัน (%)</Text>
+                <View style={f.moistureRow}>
+                  <TextInput
+                    style={[f.customInput, { flex: 1, fontWeight: 'bold', color: '#1b5e20', fontSize: 16 }]}
+                    value={moisture}
+                    onChangeText={(val) => {
+                      setMoisture(val);
+                      setIsLiveMoisture(false);
+                    }}
+                    keyboardType="numeric"
+                    placeholder="กำลังดึงข้อมูล..."
+                    placeholderTextColor="#9ca3af"
+                  />
+                  <TouchableOpacity style={f.saveMoistureBtn} onPress={saveMoisture}>
+                    <Text style={f.saveMoistureText}>💾 บันทึก</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 
-              {(showDailyTutorials || searchQuery.trim()) && (
-                <View style={f.videoGrid}>
-                  {filteredVideos.map((item) => {
-                    const isSelected = activeVideo.id === item.id;
-                    return (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={[f.videoMiniCard, isSelected && f.videoMiniCardActive]}
-                        onPress={() => handleSelectVideo(item)}
-                      >
-                        <View style={f.videoMiniTop}>
-                          <Text style={{ fontSize: 22 }}>{item.icon}</Text>
-                          <Text style={f.videoMiniDur}>{item.duration}</Text>
-                        </View>
-                        <Text style={f.videoMiniTitle} numberOfLines={2}>{item.title}</Text>
-                        <Text style={f.videoMiniDesc} numberOfLines={2}>{item.desc}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
-          </>
-        )}
+              {/* วิดีโอคู่มือการใช้งาน */}
+              <View style={f.card}>
+                <Text style={f.cardTitle}>🎥 การสอนบันทึกกิจกรรมประจำวัน</Text>
 
-        {recordMode === 'annual' && (
-          <>
-            <View style={f.card}>
-              <Text style={f.cardTitle}>🌱 วางแผนการปลูกพืชประจำปี (รองรับเสียง)</Text>
-              <Text style={f.inputCaption}>1. เลือกเดือนที่จะปลูก</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
-                  {monthsList.map((m) => (
-                    <TouchableOpacity
-                      key={m}
-                      style={[f.monthChip, selectedMonth === m && f.monthChipActive]}
-                      onPress={() => setSelectedMonth(m)}
-                    >
-                      <Text style={[f.monthChipText, selectedMonth === m && { color: '#fff' }]}>{m}</Text>
+                <View style={f.videoPlayerBox}>
+                  <Text style={{ fontSize: 32 }}>🎬</Text>
+                  <Text style={f.videoPlayingTitle}>{activeVideo.title}</Text>
+                  <Text style={f.videoPlayingSub}>⏱️ {activeVideo.duration} • {activeVideo.desc}</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                    <TouchableOpacity style={f.playBtn} onPress={() => setIsPlaying(!isPlaying)}>
+                      <Text style={f.playBtnText}>{isPlaying ? '⏸️ หยุดเล่น' : '▶️ เล่นวิดีโอ'}</Text>
                     </TouchableOpacity>
-                  ))}
+                    <TouchableOpacity
+                      style={f.playBtn}
+                      onPress={() => setShowDailyTutorials((visible) => !visible)}
+                    >
+                      <Text style={f.playBtnText}>
+                        {showDailyTutorials ? '▲ ซ่อนบทเรียนย่อย' : '▼ ดู 4 บทเรียนย่อย'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </ScrollView>
+                <Text style={f.videoContactInfo}>
+                  ติดต่อ (ตัวอย่างสมมติ โทรไม่ได้): เจ้าหน้าที่เกษตร 08X-XXX-1003 • ผู้ดูแลแอป 08X-XXX-1004
+                </Text>
 
-              <Text style={f.inputCaption}>2. ระบุชื่อพืชที่จะปลูก</Text>
-              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                <TextInput
-                  style={[f.customInput, { flex: 1 }]}
-                  placeholder="พิมพ์ชื่อพืช เช่น ข้าวหอมมะลิ..."
-                  value={cropName}
-                  onChangeText={setCropName}
-                  placeholderTextColor="#9ca3af"
-                />
-                <TouchableOpacity
-                  style={[f.voiceBtn, isListening && { backgroundColor: '#dc2626' }]}
-                  onPress={handleVoiceRecordAnnual}
-                  disabled={isListening}
-                >
-                  <Text style={f.voiceBtnText}>{isListening ? '🎙️ ฟังอยู่' : '🎙️ พูด'}</Text>
+                {(showDailyTutorials || searchQuery.trim()) && (
+                  <View style={f.videoGrid}>
+                    {filteredVideos.map((item) => {
+                      const isSelected = activeVideo.id === item.id;
+                      return (
+                        <TouchableOpacity
+                          key={item.id}
+                          style={[f.videoMiniCard, isSelected && f.videoMiniCardActive]}
+                          onPress={() => handleSelectVideo(item)}
+                        >
+                          <View style={f.videoMiniTop}>
+                            <Text style={{ fontSize: 22 }}>{item.icon}</Text>
+                            <Text style={f.videoMiniDur}>{item.duration}</Text>
+                          </View>
+                          <Text style={f.videoMiniTitle} numberOfLines={2}>{item.title}</Text>
+                          <Text style={f.videoMiniDesc} numberOfLines={2}>{item.desc}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            </>
+          )}
+
+          {recordMode === 'annual' && (
+            <>
+              <View style={f.card}>
+                <Text style={f.cardTitle}>🌱 วางแผนการปลูกพืชประจำปี (รองรับเสียง)</Text>
+                <Text style={f.inputCaption}>1. เลือกเดือนที่จะปลูก</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {monthsList.map((m) => (
+                      <TouchableOpacity
+                        key={m}
+                        style={[f.monthChip, selectedMonth === m && f.monthChipActive]}
+                        onPress={() => setSelectedMonth(m)}
+                      >
+                        <Text style={[f.monthChipText, selectedMonth === m && { color: '#fff' }]}>{m}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+
+                <Text style={f.inputCaption}>2. ระบุชื่อพืชที่จะปลูก</Text>
+                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                  <TextInput
+                    style={[f.customInput, { flex: 1 }]}
+                    placeholder="พิมพ์ชื่อพืช เช่น ข้าวหอมมะลิ..."
+                    value={cropName}
+                    onChangeText={setCropName}
+                    placeholderTextColor="#9ca3af"
+                  />
+                  <TouchableOpacity
+                    style={[f.voiceBtn, isListening && { backgroundColor: '#dc2626' }]}
+                    onPress={handleVoiceRecordAnnual}
+                    disabled={isListening}
+                  >
+                    <Text style={f.voiceBtnText}>{isListening ? '🎙️ ฟังอยู่' : '🎙️ พูด'}</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity style={f.primaryFullBtn} onPress={handleAddCropPlan}>
+                  <Text style={f.primaryFullBtnText}>➕ บันทึกแผนการปลูกลงปฏิทิน</Text>
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity style={f.primaryFullBtn} onPress={handleAddCropPlan}>
-                <Text style={f.primaryFullBtnText}>➕ บันทึกแผนการปลูกลงปฏิทิน</Text>
-              </TouchableOpacity>
-            </View>
+              <View style={f.card}>
+                <Text style={f.cardTitle}>📅 ปฏิทินแผนงานในปีนี้</Text>
+                {cropPlans.length === 0 ? (
+                  <Text style={f.emptyText}>ยังไม่มีรายการแผนการปลูก</Text>
+                ) : (
+                  <View style={{ gap: 8 }}>
+                    {cropPlans.map((plan) => (
+                      <View key={plan.id} style={f.planCardItem}>
+                        <View style={f.planMonthBadge}>
+                          <Text style={f.planMonthText}>{plan.month}</Text>
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 10 }}>
+                          <Text style={f.planCropName}>🌱 {plan.crop}</Text>
+                          <Text style={f.planStatusText}>สถานะ: วางแผนแล้ว</Text>
+                        </View>
+                        <TouchableOpacity onPress={() => handleDeletePlan(plan.id)}>
+                          <Text style={{ fontSize: 16 }}>🗑️</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </>
+          )}
 
-            <View style={f.card}>
-              <Text style={f.cardTitle}>📅 ปฏิทินแผนงานในปีนี้</Text>
-              {cropPlans.length === 0 ? (
-                <Text style={f.emptyText}>ยังไม่มีรายการแผนการปลูก</Text>
-              ) : (
-                <View style={{ gap: 8 }}>
-                  {cropPlans.map((plan) => (
-                    <View key={plan.id} style={f.planCardItem}>
-                      <View style={f.planMonthBadge}>
-                        <Text style={f.planMonthText}>{plan.month}</Text>
-                      </View>
-                      <View style={{ flex: 1, marginLeft: 10 }}>
-                        <Text style={f.planCropName}>🌱 {plan.crop}</Text>
-                        <Text style={f.planStatusText}>สถานะ: วางแผนแล้ว</Text>
-                      </View>
-                      <TouchableOpacity onPress={() => handleDeletePlan(plan.id)}>
-                        <Text style={{ fontSize: 16 }}>🗑️</Text>
-                      </TouchableOpacity>
+          {recordMode === 'community' && (
+            <>
+              <View style={f.card}>
+                <Text style={f.cardTitle}>📊 แดชบอร์ดรวมของกลุ่ม ต.ผักไหม</Text>
+                <View style={f.communityGrid}>
+                  <View style={f.communityStatBox}>
+                    <Text style={f.communityStatIcon}>🌾</Text>
+                    <Text style={f.communityStatNum}>125 ไร่</Text>
+                    <Text style={f.communityStatLabel}>พื้นที่ปลูกรวม</Text>
+                  </View>
+                  <View style={f.communityStatBox}>
+                    <Text style={f.communityStatIcon}>👨‍🌾</Text>
+                    <Text style={f.communityStatNum}>24 ราย</Text>
+                    <Text style={f.communityStatLabel}>สมาชิกกลุ่ม</Text>
+                  </View>
+                  <View style={f.communityStatBox}>
+                    <Text style={f.communityStatIcon}>📦</Text>
+                    <Text style={f.communityStatNum}>68 ตัน</Text>
+                    <Text style={f.communityStatLabel}>คาดการณ์ผลผลิต</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={f.card}>
+                <Text style={f.cardTitle}>💰 ราคารับซื้อข้าวเปลือกหอมมะลิ (วันนี้)</Text>
+                <View style={f.priceRow}>
+                  <View style={f.priceCard}>
+                    <Text style={f.priceLabel}>ข้าวเปลือกแห้ง (ชื้น ≤ 15%)</Text>
+                    <Text style={f.priceValue}>15,200 <Text style={f.priceUnit}>บาท/ตัน</Text></Text>
+                  </View>
+                  <View style={f.priceCard}>
+                    <Text style={f.priceLabel}>ข้าวเปลือกเกี่ยวสด (ชื้น 25%)</Text>
+                    <Text style={f.priceValue}>12,800 <Text style={f.priceUnit}>บาท/ตัน</Text></Text>
+                  </View>
+                </View>
+                <TouchableOpacity style={f.aiPriceButton} onPress={() => setPage('assistant')}>
+                  <Text style={f.aiPriceButtonText}>🤖 ถาม AI วิธีลดความชื้นข้าว</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={f.card}>
+                <Text style={f.cardTitle}>🌤️ พยากรณ์อากาศ • ต.ผักไหม</Text>
+                <View style={f.weatherSummary}>
+                  <View>
+                    <Text style={f.weatherCaption}>อุณหภูมิโดยประมาณ</Text>
+                    <Text style={f.weatherTemperature}>☀️ 29°C</Text>
+                  </View>
+                  <View style={f.weatherAdvice}>
+                    <Text style={f.weatherAdviceTitle}>คำแนะนำ</Text>
+                    <Text style={f.weatherAdviceText}>เหมาะแก่การตากข้าว</Text>
+                  </View>
+                </View>
+                <View style={f.forecastRow}>
+                  {[
+                    { day: 'พฤ. 19 พ.ย.', temperature: '31° / 22°', rain: 'ฝน 10%' },
+                    { day: 'ศ. 20 พ.ย.', temperature: '30° / 22°', rain: 'ฝน 35%' },
+                    { day: 'ส. 21 พ.ย.', temperature: '29° / 21°', rain: 'ฝน 60%' },
+                  ].map((fc) => (
+                    <View key={fc.day} style={f.forecastDay}>
+                      <Text style={f.forecastDayTitle}>{fc.day}</Text>
+                      <Text style={f.forecastTemperature}>{fc.temperature}</Text>
+                      <Text style={f.forecastRain}>{fc.rain}</Text>
                     </View>
                   ))}
                 </View>
-              )}
-            </View>
-          </>
-        )}
-
-        {recordMode === 'community' && (
-          <>
-            <View style={f.card}>
-              <Text style={f.cardTitle}>👥 ภาพรวมกลุ่มเกษตรกรแปลงใหญ่ ต.ผักไหม</Text>
-              <View style={f.communityGrid}>
-                <View style={f.communityStatBox}>
-                  <Text style={f.communityStatIcon}>🌾</Text>
-                  <Text style={f.communityStatNum}>125 ไร่</Text>
-                  <Text style={f.communityStatLabel}>พื้นที่ปลูกรวม</Text>
-                </View>
-                <View style={f.communityStatBox}>
-                  <Text style={f.communityStatIcon}>👨‍🌾</Text>
-                  <Text style={f.communityStatNum}>24 ราย</Text>
-                  <Text style={f.communityStatLabel}>สมาชิกกลุ่ม</Text>
-                </View>
-                <View style={f.communityStatBox}>
-                  <Text style={f.communityStatIcon}>📦</Text>
-                  <Text style={f.communityStatNum}>68 ตัน</Text>
-                  <Text style={f.communityStatLabel}>คาดการณ์ผลผลิต</Text>
-                </View>
               </View>
-            </View>
 
-            <View style={f.card}>
-              <Text style={f.cardTitle}>💰 ราคารับซื้อข้าวเปลือกหอมมะลิ (วันนี้)</Text>
-              <View style={f.priceRow}>
-                <View style={f.priceCard}>
-                  <Text style={f.priceLabel}>ข้าวเปลือกแห้ง (ชื้น ≤ 15%)</Text>
-                  <Text style={f.priceValue}>15,200 <Text style={f.priceUnit}>บาท/ตัน</Text></Text>
+              <View style={f.card}>
+                <Text style={f.cardTitle}>🗓️ ปฏิทินรอบการผลิตของกลุ่ม</Text>
+                <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                  {['เตรียมดิน', 'หว่าน', 'บำรุง', 'เก็บเกี่ยว'].map((stage, index) => (
+                    <View
+                      key={stage}
+                      style={{
+                        flex: 1,
+                        alignItems: 'center',
+                        paddingVertical: 8,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        backgroundColor: index === 2 ? '#2e7d32' : index < 2 ? '#e8f5e9' : '#f9fafb',
+                        borderColor: index === 2 ? '#2e7d32' : index < 2 ? '#c8e6c9' : '#e5e7eb',
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: index === 2 ? '#fff' : index < 2 ? '#2e7d32' : '#6b7280' }}>
+                        {index < 2 ? '✓' : index + 1}
+                      </Text>
+                      <Text style={{ fontSize: 10, marginTop: 2, fontWeight: index === 2 ? 'bold' : '500', color: index === 2 ? '#fff' : '#4b5563' }}>
+                        {stage}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
-                <View style={f.priceCard}>
-                  <Text style={f.priceLabel}>ข้าวเปลือกเกี่ยวสด (ชื้น 25%)</Text>
-                  <Text style={f.priceValue}>12,800 <Text style={f.priceUnit}>บาท/ตัน</Text></Text>
-                </View>
+                <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#2e7d32', marginTop: 8 }}>
+                  ช่วงปัจจุบัน: บำรุงต้นข้าว
+                </Text>
               </View>
-              <TouchableOpacity style={f.aiPriceButton} onPress={() => setPage('assistant')}>
-                <Text style={f.aiPriceButtonText}>🤖 ถาม AI วิธีลดความชื้นข้าว</Text>
-              </TouchableOpacity>
-            </View>
 
-            <View style={f.card}>
-              <Text style={f.cardTitle}>🌤️ พยากรณ์อากาศ • ต.ผักไหม</Text>
-              <View style={f.weatherSummary}>
-                <View>
-                  <Text style={f.weatherCaption}>อุณหภูมิโดยประมาณ</Text>
-                  <Text style={f.weatherTemperature}>☀️ 29°C</Text>
-                </View>
-                <View style={f.weatherAdvice}>
-                  <Text style={f.weatherAdviceTitle}>คำแนะนำ</Text>
-                  <Text style={f.weatherAdviceText}>เหมาะแก่การตากข้าว</Text>
-                </View>
-              </View>
-              <View style={f.forecastRow}>
-                {[
-                  { day: 'พฤ. 19 พ.ย.', temperature: '31° / 22°', rain: 'ฝน 10%' },
-                  { day: 'ศ. 20 พ.ย.', temperature: '30° / 22°', rain: 'ฝน 35%' },
-                  { day: 'ส. 21 พ.ย.', temperature: '29° / 21°', rain: 'ฝน 60%' },
-                ].map((fc) => (
-                  <View key={fc.day} style={f.forecastDay}>
-                    <Text style={f.forecastDayTitle}>{fc.day}</Text>
-                    <Text style={f.forecastTemperature}>{fc.temperature}</Text>
-                    <Text style={f.forecastRain}>{fc.rain}</Text>
+              <View style={f.card}>
+                <Text style={f.cardTitle}>📊 ภาพรวมการบันทึกและต้นทุน</Text>
+                <View style={f.communityGrid}>
+                  <View style={f.communityStatBox}>
+                    <Text style={f.communityStatIcon}>📝</Text>
+                    <Text style={f.communityStatNum}>18/24 ราย</Text>
+                    <Text style={f.communityStatLabel}>สมาชิกบันทึกข้อมูลแล้ว</Text>
                   </View>
-                ))}
-              </View>
-            </View>
-
-            <View style={f.card}>
-              <Text style={f.cardTitle}>🗓️ ปฏิทินรอบการผลิตของกลุ่ม</Text>
-              <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
-                {['เตรียมดิน', 'หว่าน', 'บำรุง', 'เก็บเกี่ยว'].map((stage, index) => (
-                  <View
-                    key={stage}
-                    style={{
-                      flex: 1,
-                      alignItems: 'center',
-                      paddingVertical: 8,
-                      borderRadius: 10,
-                      borderWidth: 1,
-                      backgroundColor: index === 2 ? '#2e7d32' : index < 2 ? '#e8f5e9' : '#f9fafb',
-                      borderColor: index === 2 ? '#2e7d32' : index < 2 ? '#c8e6c9' : '#e5e7eb',
-                    }}
-                  >
-                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: index === 2 ? '#fff' : index < 2 ? '#2e7d32' : '#6b7280' }}>
-                      {index < 2 ? '✓' : index + 1}
-                    </Text>
-                    <Text style={{ fontSize: 10, marginTop: 2, fontWeight: index === 2 ? 'bold' : '500', color: index === 2 ? '#fff' : '#4b5563' }}>
-                      {stage}
-                    </Text>
+                  <View style={[f.communityStatBox, { backgroundColor: '#fffde7', borderColor: '#dce775' }]}>
+                    <Text style={f.communityStatIcon}>💵</Text>
+                    <Text style={f.communityStatNum}>1,250 บาท/ไร่</Text>
+                    <Text style={f.communityStatLabel}>ต้นทุนเฉลี่ยต่อไร่</Text>
                   </View>
-                ))}
-              </View>
-              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#2e7d32', marginTop: 8 }}>
-                ช่วงปัจจุบัน: บำรุงต้นข้าว
-              </Text>
-            </View>
-
-            <View style={f.card}>
-              <Text style={f.cardTitle}>📊 ภาพรวมการบันทึกและต้นทุน</Text>
-              <View style={f.communityGrid}>
-                <View style={f.communityStatBox}>
-                  <Text style={f.communityStatIcon}>📝</Text>
-                  <Text style={f.communityStatNum}>18/24 ราย</Text>
-                  <Text style={f.communityStatLabel}>สมาชิกบันทึกข้อมูลแล้ว</Text>
-                </View>
-                <View style={[f.communityStatBox, { backgroundColor: '#fffde7', borderColor: '#dce775' }]}>
-                  <Text style={f.communityStatIcon}>💵</Text>
-                  <Text style={f.communityStatNum}>1,250 บาท/ไร่</Text>
-                  <Text style={f.communityStatLabel}>ต้นทุนเฉลี่ยต่อไร่</Text>
                 </View>
               </View>
-            </View>
 
-            <View style={f.card}>
-              <Text style={f.cardTitle}>📣 ประกาศจากกลุ่ม</Text>
-              <View style={f.announcementCard}>
-                <Text style={f.announcementMeta}>ประธานกลุ่ม • 17 พ.ย. 2569</Text>
-                <Text style={f.announcementTitle}>นัดสมาชิกนำตัวอย่างข้าวมาตรวจความชื้น</Text>
-                <Text style={f.announcementText}>วันศุกร์ เวลา 09.00 น. ณ ศาลากลุ่ม ก่อนวางแผนจำหน่ายผลผลิต</Text>
+              <View style={f.card}>
+                <Text style={f.cardTitle}>📣 ประกาศจากกลุ่ม</Text>
+                <View style={f.announcementCard}>
+                  <Text style={f.announcementMeta}>ประธานกลุ่ม • 17 พ.ย. 2569</Text>
+                  <Text style={f.announcementTitle}>นัดสมาชิกนำตัวอย่างข้าวมาตรวจความชื้น</Text>
+                  <Text style={f.announcementText}>วันศุกร์ เวลา 09.00 น. ณ ศาลากลุ่ม ก่อนวางแผนจำหน่ายผลผลิต</Text>
+                </View>
               </View>
-            </View>
-          </>
-        )}
-      </ScrollView>
-    )}
+            </>
+          )}
+        </ScrollView>
+      )}
 
-      {/* 🟢 Bottom Navigation Bar (สไตล์แถบล่างในรูปที่ 4) */}
-      <SharedBottomNav activeTab={bottomTab} onSelectTab={setBottomTab} unreadCount={3} />
+      {/* 🟢 Bottom Navigation Bar (กดหน้าหลักจะกลับมาหน้ารูปที่ 2 อัตโนมัติ) */}
+      <SharedBottomNav
+        activeTab={bottomTab}
+        onSelectTab={(tab) => {
+          setBottomTab(tab);
+          if (tab === 'home') {
+            setRecordMode('daily');
+          }
+        }}
+        unreadCount={3}
+      />
 
       {/* Modal Profile */}
       <Modal visible={showProfileModal} animationType="fade" transparent>
@@ -706,8 +783,8 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
               <Text style={[f.infoValue, { color: '#2e7d32' }]}>ผ่านการรับรอง</Text>
             </View>
 
-            <TouchableOpacity style={f.closeModalBtn} onPress={() => setShowProfileModal(false)}>
-              <Text style={f.closeModalText}>ปิดหน้าต่าง</Text>
+            <TouchableOpacity style={f.closeModalBtn} onPress={goHomeDaily}>
+              <Text style={f.closeModalText}>❮ ย้อนกลับหน้าหลัก</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -718,6 +795,49 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
 
 const f = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#f4f7f2' },
+
+  // แถบปุ่มย้อนกลับสำหรับหน้าย่อยทั้ง 5 หน้า
+  subPageBackBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2e7d32',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  subPageBackBtn: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  subPageBackBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  subPageBackTitle: {
+    flex: 1,
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+
+  // ปุ่มย้อนกลับในหน้าหลักเมื่อสลับไปแผนรายปี หรือ แดชบอร์ดรวมของกลุ่ม
+  inlineBackBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#e8f5e9',
+    borderWidth: 1,
+    borderColor: '#81c784',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  inlineBackBtnText: {
+    color: '#1b5e20',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
 
   // Top Header Bar
   topHeader: {
@@ -820,10 +940,14 @@ const f = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
+  iconCircleActive: {
+    borderWidth: 2,
+    borderColor: '#2e7d32',
+  },
   iconEmoji: { fontSize: 24 },
   iconLabel: { fontSize: 11, color: '#374151', fontWeight: '600', textAlign: 'center' },
 
-  // Section Divider (— หัวข้อ —)
+  // Section Divider
   sectionDividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 2 },
   dividerLine: { flex: 1, height: 1, backgroundColor: '#c8e6c9' },
   sectionDividerText: { fontSize: 13, fontWeight: 'bold', color: '#2e7d32' },
@@ -888,6 +1012,7 @@ const f = StyleSheet.create({
   videoPlayingSub: { color: '#e8f5e9', fontSize: 11, textAlign: 'center', marginTop: 4 },
   playBtn: { backgroundColor: '#ffffff', paddingVertical: 7, paddingHorizontal: 18, borderRadius: 20, marginTop: 10 },
   playBtnText: { color: '#2e7d32', fontWeight: 'bold', fontSize: 12 },
+  videoContactInfo: { color: '#6b7280', fontSize: 10, textAlign: 'center', marginBottom: 10 },
 
   videoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   videoMiniCard: {

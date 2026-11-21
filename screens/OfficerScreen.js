@@ -13,6 +13,7 @@ import {
   Modal,
   TextInput,
   Platform,
+  Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { USERS } from '../data/users';
@@ -26,6 +27,30 @@ import {
 } from '../utils/farmerMapData';
 
 const USERS_KEY = 'registered_users';
+
+const FALLBACK_WEB_URL = 'https://farmerapp-ashy.vercel.app/'; // แก้เป็นลิงก์ Vercel จริงของคุณถ้าเทสบนมือถือ
+
+const TESTER_FARMER = {
+  id: 'FRM-TESTER-01',
+  name: 'ป้าเทสเตอร์',
+  login: '089-999-1010',
+  dob: '15/05/2508',
+  age: 61,
+  role: 'farmer',
+};
+
+const TESTER_10_DAYS_LOGS = [
+  { id: 'tester-log-10', farmerId: 'FRM-TESTER-01', category: 'ACTIVITY', type: 'บันทึกกิจกรรมประจำวัน', date: '20/11/2569', time: '2026-11-20T08:30:00.000Z', plot: 'แปลง A1 (ข้าวหอมมะลิ 105)', activity: 'ตรวจเช็กความชื้นก่อนเก็บเกี่ยว', activityNote: 'เมล็ดข้าวสุกเหลืองสม่ำเสมอเกิน 85% พร้อมเก็บเกี่ยว', input: { notDone: true }, selfMade: { notDone: true }, water: { source: 'ระบายน้ำออกแห้งสนิทแล้ว' }, worker: 'แรงงานในครัวเรือน (2 คน)', moisture: 14.5, summary: 'ตรวจเช็กความชื้นก่อนเก็บเกี่ยว (14.5%)' },
+  { id: 'tester-log-09', farmerId: 'FRM-TESTER-01', category: 'ACTIVITY', type: 'บันทึกกิจกรรมประจำวัน', date: '19/11/2569', time: '2026-11-19T08:15:00.000Z', plot: 'แปลง A1 (ข้าวหอมมะลิ 105)', activity: 'ตรวจแปลงและสุ่มตรวจโรคพืชด้วย AI', activityNote: 'ไม่พบอาการโรคไหม้และใบจุด ต้นข้าวสมบูรณ์', input: { notDone: true }, selfMade: { notDone: true }, water: { source: 'แปลงแห้งพร้อมเกี่ยว' }, worker: 'แรงงานในครัวเรือน (1 คน)', moisture: 15.2, summary: 'สุ่มตรวจโรคพืชด้วย AI ไม่พบโรค' },
+  { id: 'tester-log-08', farmerId: 'FRM-TESTER-01', category: 'ACTIVITY', type: 'บันทึกกิจกรรมประจำวัน', date: '18/11/2569', time: '2026-11-18T09:00:00.000Z', plot: 'แปลง A1 (ข้าวหอมมะลิ 105)', activity: 'จัดเตรียมลานตากและกระสอบสะอาด', activityNote: 'ทำความสะอาดผ้าใบและภาชนะบรรจุตาม GAP หมวด 5', input: { notDone: true }, selfMade: { notDone: true }, water: { notDone: true }, worker: 'แรงงานในครัวเรือน (2 คน)', moisture: 16.0, summary: 'ทำความสะอาดลานตากและภาชนะบรรจุ' },
+  { id: 'tester-log-07', farmerId: 'FRM-TESTER-01', category: 'ACTIVITY', type: 'บันทึกกิจกรรมประจำวัน', date: '17/11/2569', time: '2026-11-17T07:45:00.000Z', plot: 'แปลง A1 (ข้าวหอมมะลิ 105)', activity: 'ระบายน้ำออกจากแปลงก่อนเกี่ยว', activityNote: 'เปิดคันนาระบายน้ำออกเพื่อให้พื้นดินแห้ง', input: { notDone: true }, selfMade: { notDone: true }, water: { source: 'ระบายน้ำลงคลองไส้ไก่' }, worker: 'แรงงานในครัวเรือน (1 คน)', moisture: 22.4, summary: 'ระบายน้ำออกจากแปลงก่อนเก็บเกี่ยว' },
+  { id: 'tester-log-06', farmerId: 'FRM-TESTER-01', category: 'ACTIVITY', type: 'บันทึกกิจกรรมประจำวัน', date: '16/11/2569', time: '2026-11-16T08:00:00.000Z', plot: 'แปลง A1 (ข้าวหอมมะลิ 105)', activity: 'ถอนวัชพืชและข้าวปนรอบคันนา', activityNote: 'กำจัดหญ้าข้าวนกและตัดข้าวพันธุ์ปน', input: { notDone: true }, selfMade: { notDone: true }, water: { source: 'น้ำในแปลงระดับต่ำ' }, worker: 'แรงงานในครัวเรือน (3 คน)', moisture: 48.0, summary: 'ถอนวัชพืชและข้าวพันธุ์ปน' },
+  { id: 'tester-log-05', farmerId: 'FRM-TESTER-01', category: 'ACTIVITY', type: 'บันทึกกิจกรรมประจำวัน', date: '15/11/2569', time: '2026-11-15T07:30:00.000Z', plot: 'แปลง A1 (ข้าวหอมมะลิ 105)', activity: 'ฉีดพ่นน้ำหมักชีวภาพบำรุงรวง', activityNote: 'ฉีดพ่นช่วงเช้าตอนแดดอ่อน ช่วยให้เมล็ดเต่ง', input: { notDone: true }, selfMade: { formula: 'น้ำหมักหน่อกล้วย + ฮอร์โมนไข่' }, water: { source: 'สระน้ำในไร่นา' }, worker: 'แรงงานในครัวเรือน (1 คน)', moisture: 62.5, summary: 'ฉีดพ่นน้ำหมักชีวภาพบำรุงรวง' },
+  { id: 'tester-log-04', farmerId: 'FRM-TESTER-01', category: 'ACTIVITY', type: 'บันทึกกิจกรรมประจำวัน', date: '14/11/2569', time: '2026-11-14T08:20:00.000Z', plot: 'แปลง A1 (ข้าวหอมมะลิ 105)', activity: 'สำรวจแมลงศัตรูพืช 5 จุดทั่วแปลง', activityNote: 'ไม่พบการระบาดของเพลี้ยกระโดดสีน้ำตาล', input: { notDone: true }, selfMade: { notDone: true }, water: { source: 'น้ำขังระดับปกติ 5 ซม.' }, worker: 'แรงงานในครัวเรือน (1 คน)', moisture: 65.0, summary: 'สำรวจแมลงศัตรูพืช ไม่พบการระบาด' },
+  { id: 'tester-log-03', farmerId: 'FRM-TESTER-01', category: 'ACTIVITY', type: 'บันทึกกิจกรรมประจำวัน', date: '13/11/2569', time: '2026-11-13T09:10:00.000Z', plot: 'แปลง A1 (ข้าวหอมมะลิ 105)', activity: 'ตรวจเช็กความสะอาดแหล่งน้ำและโรงเก็บ', activityNote: 'แหล่งน้ำสะอาด ไม่มีสารปนเปื้อน', input: { notDone: true }, selfMade: { notDone: true }, water: { source: 'คลองชลประทาน ต.ผักไหม' }, worker: 'แรงงานในครัวเรือน (1 คน)', moisture: 67.8, summary: 'ตรวจเช็กความสะอาดแหล่งน้ำ' },
+  { id: 'tester-log-02', farmerId: 'FRM-TESTER-01', category: 'ACTIVITY', type: 'บันทึกกิจกรรมประจำวัน', date: '12/11/2569', time: '2026-11-12T08:00:00.000Z', plot: 'แปลง A1 (ข้าวหอมมะลิ 105)', activity: 'ใส่ปุ๋ยอินทรีย์เสริมระยะข้าวตั้งท้อง', activityNote: 'หว่านปุ๋ยอินทรีย์อัดเม็ดบริเวณที่ต้นข้าวสีอ่อน', input: { type: 'ปุ๋ยอินทรีย์อัดเม็ด', quantity: '15 กก./ไร่' }, selfMade: { notDone: true }, water: { source: 'น้ำขังระดับปกติ 5 ซม.' }, worker: 'แรงงานในครัวเรือน (2 คน)', moisture: 69.2, summary: 'ใส่ปุ๋ยอินทรีย์อัดเม็ด 15 กก./ไร่' },
+  { id: 'tester-log-01', farmerId: 'FRM-TESTER-01', category: 'ACTIVITY', type: 'บันทึกกิจกรรมประจำวัน', date: '11/11/2569', time: '2026-11-11T08:00:00.000Z', plot: 'แปลง A1 (ข้าวหอมมะลิ 105)', activity: 'วัดความชื้นดินและบันทึกสภาพอากาศ', activityNote: 'อากาศแจ่มใส ความชื้นดินเหมาะสม', input: { notDone: true }, selfMade: { notDone: true }, water: { source: 'สระน้ำในไร่นา' }, worker: 'แรงงานในครัวเรือน (1 คน)', moisture: 70.1, summary: 'วัดความชื้นดิน (70.1%)' },
+];
 
 const SAMPLE_MAP_FARMERS = [
   {
@@ -111,12 +136,21 @@ function parseStoredObject(raw, key) {
   return parsed;
 }
 
-let MapContainer, TileLayer, MarkerWeb, PolygonWeb, useMapEvents;
+let MapContainer, TileLayer, MarkerWeb, MarkerWebIcon, PolygonWeb, useMapEvents;
 if (Platform.OS === 'web') {
   const ReactLeaflet = require('react-leaflet');
+  const Leaflet = require('leaflet');
+  const markerSvg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="42" viewBox="0 0 32 42"><path d="M16 1C7.7 1 1 7.7 1 16c0 11 15 25 15 25s15-14 15-25C31 7.7 24.3 1 16 1Z" fill="#dc2626" stroke="#fff" stroke-width="2"/><circle cx="16" cy="16" r="5" fill="#fff"/></svg>';
   MapContainer = ReactLeaflet.MapContainer;
   TileLayer = ReactLeaflet.TileLayer;
   MarkerWeb = ReactLeaflet.Marker;
+  MarkerWebIcon = Leaflet.icon({
+    iconUrl: `data:image/svg+xml,${encodeURIComponent(markerSvg)}`,
+    iconSize: [32, 42],
+    iconAnchor: [16, 42],
+    popupAnchor: [0, -38],
+  });
   PolygonWeb = ReactLeaflet.Polygon;
   useMapEvents = ReactLeaflet.useMapEvents;
 }
@@ -220,6 +254,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
 
   const usersById = new Map();
   for (const candidate of [
+    TESTER_FARMER, // 🟢 เพิ่มคุณป้าเทสเตอร์
     ...USERS,
     ...(Array.isArray(allUsers) ? allUsers : []),
     ...registeredFarmers,
@@ -227,6 +262,12 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
     if (candidate && candidate.id) usersById.set(candidate.id, candidate);
   }
   const usersForDisplay = Array.from(usersById.values());
+
+  // 🟢 รวมประวัติของป้าเทสเตอร์เข้ากับ logs ปัจจุบัน
+  const effectiveLogs = [
+    ...(Array.isArray(logs) ? logs : []),
+    ...TESTER_10_DAYS_LOGS,
+  ];
 
   // States สำหรับ GIS & GPS
   const [coords, setCoords] = useState('Lat: 15.118624, Long: 104.322015');
@@ -480,7 +521,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
   };
 
   const checkFarmerCompleteness = (farmerId) => {
-    const farmerLogs = logs ? logs.filter((l) => l.farmerId === farmerId) : [];
+    const farmerLogs = effectiveLogs.filter((l) => l.farmerId === farmerId);
 
     const hasActivity = farmerLogs.some((l) => l.category === 'ACTIVITY' || l.type === 'บันทึกรายวัน' || l.type === 'บันทึกกิจกรรมประจำวัน' || l.activity || l.water || l.fertilizer);
     const hasMoisture = farmerLogs.some((l) => l.category === 'SENSOR' || l.type === 'วัดความชื้น' || l.moisture !== undefined);
@@ -839,6 +880,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
                               <MarkerWeb
                                 key={farmer.id}
                                 position={[location.lat, location.lng]}
+                                icon={MarkerWebIcon}
                                 title={`${farmer.name} · ${farmer.isSample ? 'พิกัดตัวอย่าง · ' : ''}${isVisited ? 'ลงพื้นที่แล้ว' : 'ยังไม่ลงพื้นที่'}`}
                                 eventHandlers={{ click: () => handleSelectMapFarmer(farmer, location) }}
                               />
@@ -934,7 +976,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
 
                   {filteredFarmersList.map((farmer) => {
                     const check = checkFarmerCompleteness(farmer.id);
-                    const farmerLogs = logs ? logs.filter((l) => l.farmerId === farmer.id) : [];
+                    const farmerLogs = effectiveLogs.filter((l) => l.farmerId === farmer.id);
                     const recentLogs = farmerLogs.slice(0, 3);
 
                     return (
@@ -1139,17 +1181,84 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
                         <Text style={o.pillBtnPrimaryText}>อนุมัติปล่อยล็อตสินค้า & ออก QR ➔</Text>
                       </TouchableOpacity>
 
-                      {lotId !== '' && (
-                        <View style={o.qrBox}>
-                          <Text style={{ fontWeight: 'bold', color: '#15803d', marginBottom: 6 }}>
-                            ✅ อนุมัติสำเร็จ · Lot ID: {lotId}
-                          </Text>
-                          <Image
-                            source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://ผักไหม.com/trace/${lotId}` }}
-                            style={{ width: 120, height: 120, borderRadius: 10 }}
-                          />
-                        </View>
-                      )}
+                      {lotId !== '' && (() => {
+                        const baseUrl =
+                          Platform.OS === 'web' && typeof window !== 'undefined'
+                            ? window.location.origin
+                            : FALLBACK_WEB_URL;
+                        const passedCount = gapItems.filter((i) => i.checked).length;
+                        const farmerLogsCount = effectiveLogs.filter(
+                          (l) => l.farmerId === selectedFarmer?.id
+                        ).length;
+
+                        const commonQuery = new URLSearchParams({
+                          lot: lotId,
+                          farmer: selectedFarmer?.name || 'ป้าเทสเตอร์',
+                          farmerId: selectedFarmer?.id || 'FRM-TESTER-01',
+                          passed: String(passedCount),
+                          total: String(gapItems.length),
+                          days: String(farmerLogsCount || 10),
+                        }).toString();
+
+                        const certUrl = `${baseUrl}/api/trace?mode=cert&${commonQuery}`;
+                        const logsUrl = `${baseUrl}/api/trace?mode=logs&${commonQuery}`;
+
+                        const openTraceUrl = (url) => {
+                          if (Platform.OS === 'web') {
+                            window.open(url, '_blank');
+                          } else {
+                            Linking.openURL(url);
+                          }
+                        };
+
+                        return (
+                          <View style={{ marginTop: 14, gap: 12 }}>
+                            <View style={o.qrBox}>
+                              <Text style={{ fontWeight: 'bold', color: '#15803d', fontSize: 13 }}>
+                                🏅 QR 1: ใบรับรองมาตรฐาน GAP
+                              </Text>
+                              <Text style={{ fontSize: 11, color: '#475569', marginTop: 2, marginBottom: 8 }}>
+                                Lot ID: {lotId} · คุณ{selectedFarmer?.name}
+                              </Text>
+                              <Image
+                                source={{
+                                  uri: `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(certUrl)}`,
+                                }}
+                                style={{ width: 140, height: 140, borderRadius: 10, backgroundColor: '#fff' }}
+                              />
+                              <TouchableOpacity
+                                style={[o.pillBtnOutline, { marginTop: 10, width: '100%' }]}
+                                onPress={() => openTraceUrl(certUrl)}
+                              >
+                                <Text style={o.pillBtnOutlineText}>👁️ เปิดดูหน้าใบรับรอง GAP ↗</Text>
+                              </TouchableOpacity>
+                            </View>
+
+                            <View style={[o.qrBox, { backgroundColor: '#f0f9ff', borderColor: '#bae6fd' }]}>
+                              <Text style={{ fontWeight: 'bold', color: '#0369a1', fontSize: 13 }}>
+                                📅 QR 2: ติดตามบันทึกประจำวันย้อนหลัง
+                              </Text>
+                              <Text style={{ fontSize: 11, color: '#475569', marginTop: 2, marginBottom: 8 }}>
+                                สแกนเพื่อเลื่อนดูรายการบันทึก {farmerLogsCount || 10} วันย้อนหลัง
+                              </Text>
+                              <Image
+                                source={{
+                                  uri: `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(logsUrl)}`,
+                                }}
+                                style={{ width: 140, height: 140, borderRadius: 10, backgroundColor: '#fff' }}
+                              />
+                              <TouchableOpacity
+                                style={[o.pillBtnOutline, { marginTop: 10, width: '100%', borderColor: '#7dd3fc' }]}
+                                onPress={() => openTraceUrl(logsUrl)}
+                              >
+                                <Text style={[o.pillBtnOutlineText, { color: '#0369a1' }]}>
+                                  👁️ เปิดดูหน้าประวัติย้อนหลัง ↗
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        );
+                      })()}
                     </View>
                   )}
 
@@ -1172,7 +1281,11 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
                               <MapClickHandler />
 
                               {polygonPoints.map((point, index) => (
-                                <MarkerWeb key={index} position={[point.latitude, point.longitude]} />
+                                <MarkerWeb
+                                  key={index}
+                                  position={[point.latitude, point.longitude]}
+                                  icon={MarkerWebIcon}
+                                />
                               ))}
 
                               {polygonPoints.length >= 3 && (
@@ -1274,6 +1387,19 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
                           </Text>
                         </View>
                       ))}
+
+                      {/* หมายเหตุตัวเล็กแบบไม่เด่น */}
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          color: '#94a3b8',
+                          textAlign: 'center',
+                          marginTop: 12,
+                          lineHeight: 15,
+                        }}
+                      >
+                        * หมายเหตุ: ผลการวิเคราะห์โรคและธาตุอาหารเป็นเพียงการประเมินเบื้องต้นจากภาพถ่ายเท่านั้น โปรดตรวจสอบอาการในแปลงจริงอย่างละเอียดอีกครั้ง
+                      </Text>
                     </View>
                   )}
 
