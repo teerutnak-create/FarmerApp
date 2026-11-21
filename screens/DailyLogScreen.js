@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import ReadAloudLabel from '../components/ReadAloudLabel';
+import { hasSelectionOrVoice } from '../utils/hasSelectionOrVoice';
 
 export default function DailyLogScreen({ onSave, onClose, isOfficer = false, targetFarmer = null, initialData = null }) {
   // 🟢 ธีมสีสลับตาม Role
@@ -315,6 +316,37 @@ export default function DailyLogScreen({ onSave, onClose, isOfficer = false, tar
 
   // 🟢 ฟังก์ชันบันทึกข้อมูล พร้อมแสดงป๊อปอัปแจ้งเตือนและเด้งกลับหน้าหลักทันทีเมื่อกด OK
   const handleSave = () => {
+    const missingFields = [];
+    if (!hasSelectionOrVoice(selectedPlot, '')) missingFields.push('แปลงนา');
+    if (!hasSelectionOrVoice(selectedActivity, activityNote)) missingFields.push('กิจกรรมประจำวัน');
+    if (
+      !inputNotDone &&
+      (!hasSelectionOrVoice(inputType, inputNote) ||
+        !hasSelectionOrVoice(inputQuantity, inputNote))
+    ) {
+      missingFields.push('ปุ๋ยและปัจจัยที่ใช้');
+    }
+    if (!selfMadeNotDone && !hasSelectionOrVoice(selfMadeFormula, selfMadeNote)) {
+      missingFields.push('น้ำหมักหรือสารทำเอง');
+    }
+    if (
+      !waterNotDone &&
+      (!hasSelectionOrVoice(waterSource, waterNote) ||
+        !hasSelectionOrVoice(waterLevel, waterNote))
+    ) {
+      missingFields.push('การจัดการน้ำ');
+    }
+    if (!workerNotDone && !hasSelectionOrVoice(workerType, workerNote)) {
+      missingFields.push('ผู้ปฏิบัติงานและเครื่องจักร');
+    }
+    if (missingFields.length > 0) {
+      showAlert(
+        'ข้อมูลไม่ครบถ้วน',
+        `กรุณาเลือกข้อมูลหรือบันทึกข้อความเสียงในหัวข้อ: ${missingFields.join(', ')}`
+      );
+      return;
+    }
+
     const formattedDate = `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
     const logData = {
       date: formattedDate,
