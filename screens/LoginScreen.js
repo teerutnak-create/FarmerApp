@@ -234,7 +234,7 @@ export default function LoginScreen({ onLogin }) {
             </View>
           </View>
         ) : (
-          /* ==================== หน้า SIGN UP ==================== */
+          /* ==================== หน้า SIGN UP ==================== */ 
           <View style={styles.formContainer}>
             <Text style={styles.inputLabel}>Full Name</Text>
             <TextInput

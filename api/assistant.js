@@ -1,10 +1,9 @@
 import { getSensorContext } from '../lib/sensorContext.js';
 
 const PREFERRED_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-2.5-flash-lite',
-  'gemini-3-flash-preview',
-  'gemini-2.0-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.8-flash',
+  'gemini-3.6-flash',
 ];
 
 const SYSTEM = `คุณคือ "ผู้ช่วยเกษตรอัจฉริยะ" ในแอปบันทึกกิจกรรมของกลุ่มวิสาหกิจชุมชน ต.ผักไหม จ.บุรีรัมย์
@@ -12,6 +11,12 @@ const SYSTEM = `คุณคือ "ผู้ช่วยเกษตรอั�
 - ไม่ต้องใส่เครื่องหมายดอกจัน ** หรือสัญลักษณ์ Markdown ที่อ่านยาก
 - เชี่ยวชาญเรื่องข้าวหอมมะลิ 105 การทำนา ปุ๋ยหมัก น้ำหมักชีวภาพ การจัดการน้ำ ความชื้นข้าวเปลือก มาตรฐาน GAP
 - ถ้าเป็นเรื่องโรคพืช/ศัตรูพืชที่ไม่แน่ใจ หรือเรื่องสารเคมี ให้แนะนำปรึกษาเจ้าหน้าที่เกษตรอำเภอ
+- เมื่อถามช่องทางติดต่อเจ้าหน้าที่ ให้แนะนำตามเรื่อง: โรคพืช/แมลง/สารเคมีให้ติดต่อเจ้าหน้าที่ส่งเสริมการเกษตรหรือสำนักงานเกษตรอำเภอที่รับผิดชอบพื้นที่ของเกษตรกร; เรื่อง GAP ให้สอบถามผู้รับผิดชอบงาน GAP ที่สำนักงานเกษตรอำเภอของพื้นที่นั้น; เรื่องข้าว ปุ๋ย หรือน้ำ ให้ติดต่อเจ้าหน้าที่ส่งเสริมการเกษตรประจำพื้นที่; ปัญหาบัญชีหรือแอปให้ติดต่อผู้ดูแลแอปหรือกลุ่มวิสาหกิจ
+- ระบุอำเภอหรือจังหวัดเฉพาะเมื่อมีข้อมูลยืนยันจากบริบทหรือข้อมูลเกษตรกร หากไม่ทราบให้ถามพื้นที่ก่อน ห้ามเดาพื้นที่จากที่ตั้งตัวอย่างของแอป
+- ในระบบไม่มีเบอร์โทร LINE หรือบัญชีติดต่อเจ้าหน้าที่ที่ยืนยันแล้ว ห้ามแต่งข้อมูลขึ้นมาให้ดูเหมือนช่องทางจริง หากผู้ใช้ขอตัวอย่างโดยเฉพาะ สามารถยกตัวอย่างช่องทางสมมติได้ แต่ต้องขึ้นต้นชัดเจนว่า "ตัวอย่างสมมติ ไม่ใช่เบอร์ติดต่อจริงและโทรไม่ได้" และใช้เฉพาะรูปแบบเบอร์ที่มี X แทนตัวเลข เช่น 08X-XXX-1001 ห้ามแทน X ด้วยตัวเลขจริง
+- เมื่อต้องยกตัวอย่างช่องทางตามประเภท ให้ใช้ตัวอย่างสมมติ: โรคพืช/แมลง/สารเคมี — เจ้าหน้าที่ส่งเสริมการเกษตรประจำพื้นที่ (08X-XXX-1001); GAP — ผู้ประสานงาน GAP ของสำนักงานเกษตรอำเภอ (08X-XXX-1002); ข้าว/ปุ๋ย/น้ำ — เจ้าหน้าที่เกษตรประจำพื้นที่ (08X-XXX-1003); ปัญหาแอป — ผู้ดูแลแอปหรือกลุ่มวิสาหกิจ (08X-XXX-1004)
+- ระบุพื้นที่ติดต่อจากตำบล/อำเภอที่ผู้ใช้แจ้งหรือข้อมูลเกษตรกรที่ยืนยันแล้วเท่านั้น หากไม่มีข้อมูล ให้ระบุว่า "พื้นที่ตัวอย่าง: พื้นที่ของเกษตรกร" หรือถามตำบล/อำเภอ ห้ามเดาพื้นที่จริง
+- หากถูกถามหาเบอร์หรือช่องทางจริง ให้แจ้งว่าไม่มีข้อมูลยืนยันในระบบ และแนะนำให้ขอช่องทางจากสำนักงานหรือประกาศทางการของหน่วยงาน
 - ห้ามแต่งตัวเลขหรือข้อมูลที่ไม่มั่นใจ ถ้าไม่รู้ให้บอกตรงๆ
 - เมื่อตอบคำถามเกี่ยวกับค่าจากบอร์ดหรือเซนเซอร์ ให้ใช้ข้อมูลเซนเซอร์ที่แนบมาด้านล่างเท่านั้น หากไม่มีข้อมูลหรือข้อมูลเก่า ให้แจ้งตามนั้นและห้ามคาดเดา
 - ใช้ข้อมูลของเกษตรกรด้านล่างประกอบคำตอบเมื่อเกี่ยวข้อง
@@ -20,41 +25,6 @@ const SYSTEM = `คุณคือ "ผู้ช่วยเกษตรอั�
 `;
 
 const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
-
-async function getAvailableFlashModels(apiKey) {
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
-      { signal: AbortSignal.timeout(8000) }
-    );
-    if (!res.ok) return PREFERRED_MODELS;
-    const data = await res.json();
-    const valid = (data.models || [])
-      .filter((m) => {
-        const name = m.name.toLowerCase();
-        return (
-          Array.isArray(m.supportedGenerationMethods) &&
-          m.supportedGenerationMethods.includes('generateContent') &&
-          name.includes('flash') &&
-          !name.includes('tts') &&
-          !name.includes('image') &&
-          !name.includes('audio') &&
-          !name.includes('robotics') &&
-          !name.includes('computer')
-        );
-      })
-      .map((m) => m.name.replace('models/', ''));
-
-    if (valid.length === 0) return PREFERRED_MODELS;
-
-    return [
-      ...PREFERRED_MODELS.filter((p) => valid.includes(p)),
-      ...valid.filter((v) => !PREFERRED_MODELS.includes(v)),
-    ];
-  } catch {
-    return PREFERRED_MODELS;
-  }
-}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
@@ -73,6 +43,11 @@ export default async function handler(req, res) {
 
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache');
+
+  const controller = new AbortController();
+  res.on('close', () => {
+    if (!res.writableEnded) controller.abort();
+  });
 
   try {
     let sensorContext = '';
@@ -96,20 +71,19 @@ export default async function handler(req, res) {
       parts: [{ text: String(m.content || '') }],
     }));
 
-    const modelsToTry = await getAvailableFlashModels(API_KEY);
-
     let data = null;
     let usedModel = '';
     let lastErrorDetail = '';
 
-    for (const model of modelsToTry) {
+    for (const model of PREFERRED_MODELS) {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
       let ok = false;
 
-      // ปิด thinkingBudget สำหรับตระกูล 2.5 เพื่อให้ได้คำตอบเต็มโควตาและเร็วที่สุด
       const genConfig = { maxOutputTokens: 4096 };
-      if (model.includes('2.5')) {
-        genConfig.thinkingConfig = { thinkingBudget: 0 };
+      if (model.startsWith('gemini-3.')) {
+        genConfig.thinkingConfig = {
+          thinkingLevel: model === 'gemini-3.5-flash-lite' ? 'minimal' : 'low',
+        };
       }
 
       const payload = JSON.stringify({
@@ -130,9 +104,13 @@ export default async function handler(req, res) {
               'x-goog-api-key': API_KEY,
             },
             body: payload,
-            signal: AbortSignal.timeout(25000),
+            signal: AbortSignal.any([
+              controller.signal,
+              AbortSignal.timeout(25000),
+            ]),
           });
         } catch (fetchErr) {
+          if (controller.signal.aborted) return;
           lastErrorDetail = `Timeout/Network (${model}): ${fetchErr.message}`;
           break;
         }

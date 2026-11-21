@@ -81,6 +81,7 @@ export function SharedTabContent({
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const chatRequestRef = useRef(null);
   const speechRecognitionRef = useRef(null);
   const nativeVoiceRef = useRef(null);
   const voiceBaseChatInputRef = useRef('');
@@ -117,6 +118,9 @@ export function SharedTabContent({
 
   useEffect(() => {
     return () => {
+      chatRequestRef.current?.abort();
+      chatRequestRef.current = null;
+
       if (speechRecognitionRef.current) {
         const recognition = speechRecognitionRef.current;
         recognition.onresult = null;
@@ -258,13 +262,17 @@ export function SharedTabContent({
     setChatInput('');
 
     setChatLoading(true);
+    const controller = new AbortController();
+    chatRequestRef.current = controller;
     try {
       const history = messages
         .filter((message) => message.id !== 'welcome' && !message.failed && !message.isError)
         .filter((message) => message.role)
         .map((message) => ({ role: message.role, content: message.text }));
       const reply = await requestAssistant(
-        [...history, { role: 'user', content: textToSend }]
+        [...history, { role: 'user', content: textToSend }],
+        '',
+        controller.signal
       );
       const replyTime = new Date();
       setMessages((current) => [
@@ -281,6 +289,7 @@ export function SharedTabContent({
         },
       ]);
     } catch (error) {
+      if (controller.signal.aborted) return;
       setMessages((current) => [
         ...current.map((message) =>
           message.id === userMessage.id ? { ...message, failed: true } : message
@@ -295,8 +304,19 @@ export function SharedTabContent({
         },
       ]);
     } finally {
-      setChatLoading(false);
+      if (chatRequestRef.current === controller) {
+        chatRequestRef.current = null;
+        setChatLoading(false);
+      }
     }
+  };
+
+  const handleStopChat = () => {
+    const controller = chatRequestRef.current;
+    if (!controller) return;
+    chatRequestRef.current = null;
+    controller.abort();
+    setChatLoading(false);
   };
 
   const fs = (size) => (largeText && Platform.OS !== 'web' ? size + 3 : size);
@@ -370,13 +390,25 @@ export function SharedTabContent({
           >
             <Text style={st.micBtnText}>{isListening ? '⏹️' : '🎙️'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[st.sendBtn, (chatLoading || !chatInput.trim()) && st.sendBtnDisabled]}
-            onPress={handleSendChat}
-            disabled={chatLoading || !chatInput.trim()}
-          >
-            <Text style={st.sendBtnText}>{chatLoading ? '...' : 'ส่ง'}</Text>
-          </TouchableOpacity>
+          {chatLoading ? (
+            <TouchableOpacity
+              style={st.stopBtn}
+              onPress={handleStopChat}
+              accessibilityRole="button"
+              accessibilityLabel="หยุดการสร้างคำตอบ"
+              activeOpacity={0.8}
+            >
+              <View style={st.stopIcon} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[st.sendBtn, !chatInput.trim() && st.sendBtnDisabled]}
+              onPress={handleSendChat}
+              disabled={!chatInput.trim()}
+            >
+              <Text style={st.sendBtnText}>ส่ง</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -567,6 +599,8 @@ const st = StyleSheet.create({
   sendBtn: { backgroundColor: '#2e7d32', paddingHorizontal: 18, borderRadius: 20, justifyContent: 'center' },
   sendBtnDisabled: { backgroundColor: '#a5d6a7' },
   sendBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
+  stopBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#1f2937', justifyContent: 'center', alignItems: 'center' },
+  stopIcon: { width: 12, height: 12, borderRadius: 2, backgroundColor: '#ffffff' },
 
   // Alerts
   alertCard: { flexDirection: 'row', backgroundColor: '#ffffff', padding: 12, borderRadius: 14, gap: 12, alignItems: 'center', elevation: 1 },

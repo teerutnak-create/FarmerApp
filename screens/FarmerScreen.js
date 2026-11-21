@@ -516,6 +516,9 @@ export default function FarmerScreen({ user, logs, onLog, onLogout }) {
                     </TouchableOpacity>
                   </View>
                 </View>
+                <Text style={f.videoContactInfo}>
+                  ติดต่อ (ตัวอย่างสมมติ โทรไม่ได้): เจ้าหน้าที่เกษตร 08X-XXX-1003 • ผู้ดูแลแอป 08X-XXX-1004
+                </Text>
 
                 {(showDailyTutorials || searchQuery.trim()) && (
                   <View style={f.videoGrid}>
@@ -1009,6 +1012,7 @@ const f = StyleSheet.create({
   videoPlayingSub: { color: '#e8f5e9', fontSize: 11, textAlign: 'center', marginTop: 4 },
   playBtn: { backgroundColor: '#ffffff', paddingVertical: 7, paddingHorizontal: 18, borderRadius: 20, marginTop: 10 },
   playBtnText: { color: '#2e7d32', fontWeight: 'bold', fontSize: 12 },
+  videoContactInfo: { color: '#6b7280', fontSize: 10, textAlign: 'center', marginBottom: 10 },
 
   videoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   videoMiniCard: {

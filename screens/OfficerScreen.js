@@ -136,12 +136,21 @@ function parseStoredObject(raw, key) {
   return parsed;
 }
 
-let MapContainer, TileLayer, MarkerWeb, PolygonWeb, useMapEvents;
+let MapContainer, TileLayer, MarkerWeb, MarkerWebIcon, PolygonWeb, useMapEvents;
 if (Platform.OS === 'web') {
   const ReactLeaflet = require('react-leaflet');
+  const Leaflet = require('leaflet');
+  const markerSvg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="42" viewBox="0 0 32 42"><path d="M16 1C7.7 1 1 7.7 1 16c0 11 15 25 15 25s15-14 15-25C31 7.7 24.3 1 16 1Z" fill="#dc2626" stroke="#fff" stroke-width="2"/><circle cx="16" cy="16" r="5" fill="#fff"/></svg>';
   MapContainer = ReactLeaflet.MapContainer;
   TileLayer = ReactLeaflet.TileLayer;
   MarkerWeb = ReactLeaflet.Marker;
+  MarkerWebIcon = Leaflet.icon({
+    iconUrl: `data:image/svg+xml,${encodeURIComponent(markerSvg)}`,
+    iconSize: [32, 42],
+    iconAnchor: [16, 42],
+    popupAnchor: [0, -38],
+  });
   PolygonWeb = ReactLeaflet.Polygon;
   useMapEvents = ReactLeaflet.useMapEvents;
 }
@@ -871,6 +880,7 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
                               <MarkerWeb
                                 key={farmer.id}
                                 position={[location.lat, location.lng]}
+                                icon={MarkerWebIcon}
                                 title={`${farmer.name} · ${farmer.isSample ? 'พิกัดตัวอย่าง · ' : ''}${isVisited ? 'ลงพื้นที่แล้ว' : 'ยังไม่ลงพื้นที่'}`}
                                 eventHandlers={{ click: () => handleSelectMapFarmer(farmer, location) }}
                               />
@@ -1271,7 +1281,11 @@ export default function OfficerScreen({ user, logs, allUsers, onClear, onLogout,
                               <MapClickHandler />
 
                               {polygonPoints.map((point, index) => (
-                                <MarkerWeb key={index} position={[point.latitude, point.longitude]} />
+                                <MarkerWeb
+                                  key={index}
+                                  position={[point.latitude, point.longitude]}
+                                  icon={MarkerWebIcon}
+                                />
                               ))}
 
                               {polygonPoints.length >= 3 && (
