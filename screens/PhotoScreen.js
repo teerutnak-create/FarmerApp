@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   ScrollView,
   Image,
@@ -17,6 +18,7 @@ import { notify } from '../utils/notify';
 
 export default function PhotoScreen({ onSave, onClose }) {
   const [plot, setPlot] = useState(null);
+  const [voiceText, setVoiceText] = useState('');
   const [photo, setPhoto] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -60,6 +62,7 @@ export default function PhotoScreen({ onSave, onClose }) {
 
     onSave('ถ่ายรูปแปลง', {
       plot,
+      voiceText: voiceText.trim(),
       photoUri: photo.uri,
       photoTime: photo.takenAt,
       lat: photo.lat,
@@ -97,7 +100,7 @@ export default function PhotoScreen({ onSave, onClose }) {
                 <TouchableOpacity
                   key={x}
                   style={[styles.chip, isSelected && styles.chipActive]}
-                  onPress={() => setPlot(x)}
+                  onPress={() => setPlot(isSelected ? null : x)}
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
@@ -107,6 +110,16 @@ export default function PhotoScreen({ onSave, onClose }) {
               );
             })}
           </View>
+          <Text style={styles.voiceTextLabel}>ข้อความเสียง / รายละเอียดเพิ่มเติม</Text>
+          <TextInput
+            style={styles.voiceTextInput}
+            value={voiceText}
+            onChangeText={setVoiceText}
+            placeholder="พิมพ์ข้อความบันทึกเสียงหรือรายละเอียดเพิ่มเติม"
+            placeholderTextColor="#94a3b8"
+            multiline
+            textAlignVertical="top"
+          />
         </View>
 
         {/* Card 2: ถ่ายรูป & พรีวิว */}
@@ -252,6 +265,23 @@ const styles = StyleSheet.create({
   chipTextActive: {
     color: '#ffffff',
     fontWeight: '700',
+  },
+  voiceTextLabel: {
+    marginTop: 12,
+    marginBottom: 6,
+    color: '#14532d',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  voiceTextInput: {
+    minHeight: 80,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    borderRadius: 12,
+    backgroundColor: '#f0fdf4',
+    color: '#14532d',
+    fontSize: 14,
   },
   photoBtn: {
     backgroundColor: '#15803d', // ปุ่มถ่ายรูปสีเขียว
