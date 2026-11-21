@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   StatusBar,
 } from 'react-native';
+import VoiceTextInput from './VoiceTextInput';
 import ReadAloudLabel from '../components/ReadAloudLabel';
 import { notify } from '../utils/notify';
 import { PLOTS } from '../data/options';
@@ -30,9 +31,29 @@ export default function PlotInfoScreen({ onSave, onClose }) {
   const [facilities, setFacilities] = useState([]);
   const [standards, setStandards] = useState([]);
   const [months, setMonths] = useState(12);
+  const [voiceNotes, setVoiceNotes] = useState({});
+  const [activeVoiceField, setActiveVoiceField] = useState(null);
 
   const toggle = (list, setList, x) =>
     setList(list.includes(x) ? list.filter((i) => i !== x) : [...list, x]);
+
+  const updateVoiceNote = (fieldKey, text) =>
+    setVoiceNotes((notes) => ({ ...notes, [fieldKey]: text }));
+
+  const handleVoiceListeningChange = (fieldKey, isListening) =>
+    setActiveVoiceField((active) =>
+      isListening ? fieldKey : active === fieldKey ? null : active
+    );
+
+  const renderVoiceInput = (fieldKey) => (
+    <VoiceTextInput
+      value={voiceNotes[fieldKey] || ''}
+      onChangeText={(text) => updateVoiceNote(fieldKey, text)}
+      fieldKey={fieldKey}
+      disabled={activeVoiceField !== null && activeVoiceField !== fieldKey}
+      onListeningChange={handleVoiceListeningChange}
+    />
+  );
 
   const hasCert = standards.some((x) => CERT_STANDARDS.includes(x));
 
@@ -41,7 +62,7 @@ export default function PlotInfoScreen({ onSave, onClose }) {
     if (!soil) return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกชนิดดิน');
     if (!chem) return Alert.alert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกประวัติการใช้สารเคมี');
 
-    const extra = { plot, rai, soil, chem, facilities, standards };
+    const extra = { plot, rai, soil, chem, facilities, standards, voiceNotes };
     if (hasCert) {
       extra.certExpiry = new Date(Date.now() + months * 30 * DAY).toISOString();
     }
@@ -85,7 +106,7 @@ export default function PlotInfoScreen({ onSave, onClose }) {
                 <TouchableOpacity
                   key={p}
                   style={[styles.chip, isSelected && styles.chipActive]}
-                  onPress={() => setPlot(p)}
+                  onPress={() => setPlot(isSelected ? null : p)}
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
@@ -95,6 +116,7 @@ export default function PlotInfoScreen({ onSave, onClose }) {
               );
             })}
           </View>
+          {renderVoiceInput('plot')}
         </View>
 
         {/* ข้อ 2: ขนาดแปลงนา */}
@@ -128,6 +150,7 @@ export default function PlotInfoScreen({ onSave, onClose }) {
               <Text style={styles.stepBtnText}>+</Text>
             </TouchableOpacity>
           </View>
+          {renderVoiceInput('area')}
         </View>
 
         {/* ข้อ 3: ชนิดดิน */}
@@ -146,7 +169,7 @@ export default function PlotInfoScreen({ onSave, onClose }) {
                 <TouchableOpacity
                   key={x}
                   style={[styles.chip, isSelected && styles.chipActive]}
-                  onPress={() => setSoil(x)}
+                  onPress={() => setSoil(isSelected ? null : x)}
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
@@ -156,6 +179,7 @@ export default function PlotInfoScreen({ onSave, onClose }) {
               );
             })}
           </View>
+          {renderVoiceInput('soil')}
         </View>
 
         {/* ข้อ 4: ประวัติสารเคมี */}
@@ -174,7 +198,7 @@ export default function PlotInfoScreen({ onSave, onClose }) {
                 <TouchableOpacity
                   key={x}
                   style={[styles.chip, isSelected && styles.chipActive]}
-                  onPress={() => setChem(x)}
+                  onPress={() => setChem(isSelected ? null : x)}
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
@@ -184,6 +208,7 @@ export default function PlotInfoScreen({ onSave, onClose }) {
               );
             })}
           </View>
+          {renderVoiceInput('chemical')}
         </View>
 
         {/* ข้อ 5: สิ่งที่มีในแปลง */}
@@ -212,6 +237,7 @@ export default function PlotInfoScreen({ onSave, onClose }) {
               );
             })}
           </View>
+          {renderVoiceInput('facilities')}
         </View>
 
         {/* ข้อ 6: มาตรฐานที่มี */}
@@ -240,6 +266,7 @@ export default function PlotInfoScreen({ onSave, onClose }) {
               );
             })}
           </View>
+          {renderVoiceInput('standards')}
 
           {hasCert && (
             <View style={styles.certExpiryBox}>
