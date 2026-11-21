@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   StyleSheet,
   SafeAreaView,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -19,8 +20,141 @@ import { notify } from '../utils/notify';
 export default function PhotoScreen({ onSave, onClose }) {
   const [plot, setPlot] = useState(null);
   const [voiceText, setVoiceText] = useState('');
+  const [isListening, setIsListening] = useState(false);
   const [photo, setPhoto] = useState(null);
   const [busy, setBusy] = useState(false);
+  const speechRecognitionRef = useRef(null);
+  const nativeVoiceRef = useRef(null);
+  const voiceTextRef = useRef('');
+  const voiceBaseRef = useRef('');
+
+  useEffect(() => () => {
+    if (speechRecognitionRef.current) {
+      const recognition = speechRecognitionRef.current;
+      recognition.onresult = null;
+      recognition.onerror = null;
+      recognition.onend = null;
+      try {
+        recognition.abort();
+      } catch (error) {
+        console.warn('Unable to stop speech recognition:', error);
+      }
+      speechRecognitionRef.current = null;
+    }
+
+    if (nativeVoiceRef.current) {
+      const voice = nativeVoiceRef.current;
+      voice.onSpeechResults = undefined;
+      voice.onSpeechPartialResults = undefined;
+      voice.onSpeechEnd = undefined;
+      voice.onSpeechError = undefined;
+      nativeVoiceRef.current = null;
+      voice.destroy().catch((error) => {
+        console.warn('Unable to release voice recognition:', error);
+      });
+    }
+  }, []);
+
+  const updateVoiceText = (text) => {
+    voiceTextRef.current = text;
+    setVoiceText(text);
+  };
+
+  const applyTranscript = (transcript) => {
+    const text = [voiceBaseRef.current, transcript.trim()].filter(Boolean).join(' ');
+    updateVoiceText(text);
+  };
+
+  const handleVoiceTyping = async () => {
+    if (isListening) {
+      try {
+        if (Platform.OS === 'web' && speechRecognitionRef.current) {
+          speechRecognitionRef.current.stop();
+          return;
+        } else if (nativeVoiceRef.current) {
+          await nativeVoiceRef.current.stop();
+        }
+        setIsListening(false);
+      } catch (error) {
+        setIsListening(false);
+        Alert.alert('หยุดรับเสียงไม่สำเร็จ', error?.message || 'กรุณาลองอีกครั้ง');
+      }
+      return;
+    }
+
+    voiceBaseRef.current = voiceTextRef.current.trim();
+    setIsListening(true);
+
+    if (Platform.OS === 'web') {
+      const SpeechRecognition =
+        typeof window !== 'undefined' &&
+        (window.SpeechRecognition || window.webkitSpeechRecognition);
+
+      if (!SpeechRecognition) {
+        setIsListening(false);
+        Alert.alert('ไม่รองรับ', 'เบราว์เซอร์นี้ไม่รองรับการรู้จำเสียง แนะนำให้ใช้ Google Chrome');
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'th-TH';
+      recognition.interimResults = true;
+      recognition.continuous = false;
+      recognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = 0; i < event.results.length; i += 1) {
+          transcript += `${event.results[i][0].transcript} `;
+        }
+        if (transcript.trim()) applyTranscript(transcript);
+      };
+      recognition.onerror = (event) => {
+        setIsListening(false);
+        if (event.error !== 'aborted') {
+          Alert.alert('จับเสียงไม่สำเร็จ', 'กรุณาอนุญาตใช้ไมโครโฟนแล้วลองอีกครั้ง');
+        }
+      };
+      recognition.onend = () => {
+        speechRecognitionRef.current = null;
+        setIsListening(false);
+      };
+      speechRecognitionRef.current = recognition;
+      try {
+        recognition.start();
+      } catch (error) {
+        speechRecognitionRef.current = null;
+        setIsListening(false);
+        Alert.alert('เริ่มรับเสียงไม่สำเร็จ', error?.message || 'กรุณาลองอีกครั้ง');
+      }
+      return;
+    }
+
+    try {
+      const Voice = require('@react-native-voice/voice').default;
+      nativeVoiceRef.current = Voice;
+      Voice.onSpeechResults = (event) => {
+        if (event.value?.[0]) applyTranscript(event.value[0]);
+      };
+      Voice.onSpeechPartialResults = (event) => {
+        if (event.value?.[0]) applyTranscript(event.value[0]);
+      };
+      Voice.onSpeechEnd = () => setIsListening(false);
+      Voice.onSpeechError = (event) => {
+        setIsListening(false);
+        Alert.alert('จับเสียงไม่สำเร็จ', event.error || 'กรุณาอนุญาตใช้ไมโครโฟนแล้วลองอีกครั้ง');
+      };
+
+      const available = await Voice.isAvailable();
+      if (!available) {
+        setIsListening(false);
+        Alert.alert('ไม่รองรับ', 'อุปกรณ์นี้ไม่รองรับการรู้จำเสียง');
+        return;
+      }
+      await Voice.start('th-TH');
+    } catch (error) {
+      setIsListening(false);
+      Alert.alert('เริ่มรับเสียงไม่สำเร็จ', error?.message || 'กรุณาตรวจสอบสิทธิ์ไมโครโฟนแล้วลองอีกครั้ง');
+    }
+  };
 
   const takePhoto = async () => {
     const cam = await ImagePicker.requestCameraPermissionsAsync();
@@ -114,12 +248,21 @@ export default function PhotoScreen({ onSave, onClose }) {
           <TextInput
             style={styles.voiceTextInput}
             value={voiceText}
-            onChangeText={setVoiceText}
+            onChangeText={updateVoiceText}
             placeholder="พิมพ์ข้อความบันทึกเสียงหรือรายละเอียดเพิ่มเติม"
             placeholderTextColor="#94a3b8"
             multiline
             textAlignVertical="top"
           />
+          <TouchableOpacity
+            style={[styles.voiceBtn, isListening && styles.voiceBtnActive]}
+            onPress={handleVoiceTyping}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.voiceBtnText}>
+              {isListening ? '⏹️ หยุดพูด' : '🎙️ พูดเพื่อพิมพ์'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Card 2: ถ่ายรูป & พรีวิว */}
@@ -282,6 +425,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0fdf4',
     color: '#14532d',
     fontSize: 14,
+  },
+  voiceBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: '#15803d',
+  },
+  voiceBtnActive: {
+    backgroundColor: '#dc2626',
+  },
+  voiceBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   photoBtn: {
     backgroundColor: '#15803d', // ปุ่มถ่ายรูปสีเขียว
